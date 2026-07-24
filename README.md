@@ -1,6 +1,6 @@
 # `is-on-water`
 
-Check whether a geographic coordinate is on water (seas, lakes, and rivers). Exposed via an HTTP API for single coordinate (`GET /api/is-on-water?lat=${lat}&lon=${lon}`) and batch (`POST /api/is-on-water` with an array of `{ lat, lon }` objects) lookups.
+Check whether a geographic coordinate is on water (seas, lakes, and rivers). Exposed via an HTTP API for single coordinate (`GET /api/water?lat=${lat}&lon=${lon}`) and batch (`POST /api/water` with `{ "coordinates": [{ lat, lon }, ...] }`) lookups.
 
 Built on [Fastify](https://fastify.dev/) with optional OpenTelemetry, Swagger at `/documentation`, and rate limiting (in-memory by default; Redis when `REDIS_URL` is set).
 
@@ -47,10 +47,12 @@ By default the trace exporter writes to standard output. Set `OTEL_EXPORTER_OTLP
 
 Interactive docs: `/documentation`
 
-### GET `/api/is-on-water`
+Errors use [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details (`application/problem+json`).
+
+### GET `/api/water`
 
 ```sh
-curl "http://localhost:3000/api/is-on-water?lat=20.112682&lon=-37.048647"
+curl "http://localhost:3000/api/water?lat=20.112682&lon=-37.048647"
 ```
 
 ```json
@@ -59,14 +61,23 @@ curl "http://localhost:3000/api/is-on-water?lat=20.112682&lon=-37.048647"
 
 Latitude must be between -90 and 90; longitude between -180 and 180.
 
-### POST `/api/is-on-water`
+### POST `/api/water`
 
-Body: JSON array of `{ "lat", "lon" }` (max `MAX_BATCH_SIZE`, default 500).
+Body: `{ "coordinates": [{ "lat", "lon" }, ...] }` (max `MAX_BATCH_SIZE`, default 500). A bare JSON array is also accepted.
 
 ```sh
-curl -X POST http://localhost:3000/api/is-on-water \
+curl -X POST http://localhost:3000/api/water \
   -H 'content-type: application/json' \
-  -d '[{"lat":20.112682,"lon":-37.048647},{"lat":40.292097,"lon":-98.613164}]'
+  -d '{"coordinates":[{"lat":20.112682,"lon":-37.048647},{"lat":40.292097,"lon":-98.613164}]}'
+```
+
+```json
+{
+  "results": [
+    { "water": true, "lat": 20.112682, "lon": -37.048647 },
+    { "water": false, "lat": 40.292097, "lon": -98.613164 }
+  ]
+}
 ```
 
 ## Data

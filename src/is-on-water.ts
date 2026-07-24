@@ -1,9 +1,10 @@
-// geo-maps / geojson-geometries-lookup ship without TypeScript types
-// @ts-nocheck
-import GeoJsonLookup from "geojson-geometries-lookup";
-import getMapWaterbodies from "@geo-maps/earth-waterbodies-1m";
-
-const waterLookup = new GeoJsonLookup(getMapWaterbodies());
+import {
+    buildWaterIndex,
+    loadFeaturesFromFgb,
+    pointInWaterIndex,
+    type BBoxItem,
+} from './waterbodies-index';
+import type RBush from 'rbush';
 
 export type Coordinate = {
     lat: number;
@@ -16,14 +17,33 @@ export type IsOnWaterResult = {
     lon: number;
 };
 
+let waterIndex: RBush<BBoxItem> | null = null;
+let initPromise: Promise<void> | null = null;
+
+/**
+ * Load FlatGeobuf waterbodies and build the in-memory spatial index.
+ * Safe to call multiple times; initialization runs once.
+ */
+export const initWaterLookup = async (): Promise<void> => {
+    if (waterIndex) return;
+    if (!initPromise) {
+        initPromise = (async () => {
+            const features = await loadFeaturesFromFgb();
+            waterIndex = buildWaterIndex(features);
+        })();
+    }
+    await initPromise;
+};
+
 export const isOnWater = ({ lat, lon }: Coordinate): IsOnWaterResult => {
-    const water = waterLookup.hasContainers({
-        type: "Point",
-        coordinates: [lon, lat],
-    });
+    if (!waterIndex) {
+        throw new Error(
+            'Water lookup not initialized. Call await initWaterLookup() before isOnWater().'
+        );
+    }
 
     return {
-        water,
+        water: pointInWaterIndex(waterIndex, lon, lat),
         lat,
         lon,
     };

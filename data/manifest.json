@@ -1,0 +1,13 @@
+{
+  "sourcePackage": "@geo-maps/earth-waterbodies-1m",
+  "sourceVersion": "0.6.0",
+  "sourceSha256": "85f8d3f93f0f6f809f0ae90188637b86374efe2cf8300108b4f78252a2e74b69",
+  "fgbSha256": "1e98b2efdd75b2c8f3dd33724a165ecaf7306291b1303098d59694d130726299",
+  "fgbGzSha256": "6c40308211ef28634c21507f9592299b597a13a601e06462950774e585dea60f",
+  "featureCount": 3,
+  "polygonPartCount": 915482,
+  "bytes": 124260816,
+  "gzipBytes": 55148021,
+  "builder": "flatgeobuf-js",
+  "generatedAt": "2026-07-24T15:28:29.652Z"
+}

@@ -2,11 +2,15 @@ import { otlpShutdown } from './telemetry';
 import { initApp } from './app';
 import { Env, initConfig } from './config';
 import { initLogging } from './logging';
+import { initWaterLookup } from './is-on-water';
 import gracefulShutdown from 'http-graceful-shutdown';
 
 const main = async () => {
     const config = await initConfig();
     const logger = await initLogging(config);
+    logger.info('Loading waterbodies FlatGeobuf…');
+    await initWaterLookup();
+    logger.info('Waterbodies index ready');
     const app = await initApp(config, logger);
 
     await app.fastify.listen({

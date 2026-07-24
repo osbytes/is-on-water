@@ -4,208 +4,620 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Is On Water</title>
-    <meta name="description" content="Click the map or enter coordinates to check whether a point is on water. Self-hostable HTTP API for seas, lakes, and rivers.">
+    <meta name="description" content="Check whether a geographic coordinate is on water (seas, lakes, and rivers). Self-hostable HTTP API.">
     <meta property="og:title" content="Is On Water">
-    <meta property="og:description" content="Check whether a geographic coordinate is on water via a self-hostable HTTP API.">
+    <meta property="og:description" content="Check whether a geographic coordinate is on water (seas, lakes, and rivers) via a self-hostable HTTP API.">
     <meta property="og:type" content="website">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💧</text></svg>">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg: #ffffff;
+            --fg: #111111;
+            --muted: #6b6b6b;
+            --border: #e8e8e8;
+            --surface: #fafafa;
+            --water: #1a5f8a;
+            --land: #3d3d3d;
+        }
+
+        * { box-sizing: border-box; }
+
         html, body {
             margin: 0;
-            height: 100%;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            padding: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: "IBM Plex Sans", sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
-        #map { height: 100%; }
-        .panel {
-            background: #fff;
-            padding: 0.75rem;
-            border-radius: 5px;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+        a { color: inherit; }
+
+        .mono {
+            font-family: "IBM Plex Mono", ui-monospace, monospace;
+        }
+
+        .site-header {
             display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            max-width: 20rem;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
         }
-        .panel h1 {
-            margin: 0;
-            font-size: 1rem;
-            font-weight: 700;
-            line-height: 1.2;
-        }
-        .panel p {
-            margin: 0;
-            font-size: 0.75rem;
-            color: #444;
-            line-height: 1.35;
-        }
-        .coords {
-            display: grid;
-            grid-template-columns: 1fr 1fr auto;
-            gap: 0.35rem;
-            align-items: end;
-        }
-        .coords label {
-            display: flex;
-            flex-direction: column;
-            gap: 0.15rem;
-            font-size: 0.65rem;
-            color: #666;
-        }
-        .coords input {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 0.35rem;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            font: inherit;
-            font-size: 0.75rem;
-        }
-        .coords button {
-            padding: 0.35rem 0.55rem;
-            border: 1px solid #222;
-            border-radius: 3px;
-            background: #222;
-            color: #fff;
-            font: inherit;
-            font-size: 0.75rem;
-            cursor: pointer;
-        }
-        .coords button:hover { background: #444; }
-        .api-link {
-            font-size: 0.7rem;
-            word-break: break-all;
-        }
-        .links {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-        }
-        .links a {
-            display: flex;
-            justify-content: center;
+
+        .brand {
+            display: inline-flex;
             align-items: center;
             gap: 0.5rem;
             text-decoration: none;
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }
-        .attribution {
-            font-size: 0.65rem;
-            color: #666;
-            line-height: 1.3;
+
+        .brand svg {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
         }
-        .attribution a { color: #666; }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .header-actions a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            text-decoration: none;
+            color: var(--muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .header-actions a:hover { color: var(--fg); }
+
+        .header-actions img {
+            display: block;
+            height: 1.35rem;
+            width: auto;
+        }
+
+        .github-icon {
+            width: 1rem;
+            height: 1rem;
+        }
+
+        main {
+            max-width: 68rem;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 4rem;
+        }
+
+        .hero {
+            max-width: 36rem;
+            margin-bottom: 2.75rem;
+        }
+
+        .eyebrow {
+            margin: 0 0 0.75rem;
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .hero h1 {
+            margin: 0 0 0.85rem;
+            font-size: clamp(2rem, 4.5vw, 2.75rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 1.05rem;
+            max-width: 32rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 2.5rem;
+            align-items: start;
+        }
+
+        @media (max-width: 860px) {
+            .grid { grid-template-columns: 1fr; gap: 2rem; }
+        }
+
+        .section-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-head h2,
+        .panel-label {
+            margin: 0;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .endpoint {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .try {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .coords {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.65rem;
+        }
+
+        .coords label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            font-size: 0.7rem;
+            color: var(--muted);
+        }
+
+        .coords input {
+            width: 100%;
+            padding: 0.65rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg);
+            font: inherit;
+            font-family: "IBM Plex Mono", ui-monospace, monospace;
+            font-size: 0.9rem;
+            color: var(--fg);
+        }
+
+        .coords input:focus {
+            outline: 2px solid #111;
+            outline-offset: 1px;
+        }
+
+        .check-btn {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 6px;
+            background: #111;
+            color: #fff;
+            font: inherit;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .check-btn:hover { background: #2a2a2a; }
+        .check-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        .response-box {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        .response-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.55rem 0.85rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            font-size: 0.75rem;
+        }
+
+        .status-pill {
+            font-weight: 600;
+            text-transform: lowercase;
+        }
+
+        .status-pill.water { color: var(--water); }
+        .status-pill.land { color: var(--land); }
+        .status-pill.error { color: #a11; }
+
+        .http-status {
+            color: var(--muted);
+            font-family: "IBM Plex Mono", ui-monospace, monospace;
+        }
+
+        .response-box pre {
+            margin: 0;
+            padding: 0.85rem;
+            overflow-x: auto;
+            font-family: "IBM Plex Mono", ui-monospace, monospace;
+            font-size: 0.8rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .examples {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+        }
+
+        .example {
+            text-align: left;
+            padding: 0.7rem 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            cursor: pointer;
+            font: inherit;
+        }
+
+        .example:hover,
+        .example.active {
+            border-color: #111;
+            background: var(--surface);
+        }
+
+        .example strong {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 0.15rem;
+        }
+
+        .example span {
+            font-family: "IBM Plex Mono", ui-monospace, monospace;
+            font-size: 0.68rem;
+            color: var(--muted);
+        }
+
+        .side {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .code-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 0.65rem;
+        }
+
+        .code-card + .code-card { margin-top: 0.75rem; }
+
+        .code-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.45rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            font-size: 0.7rem;
+            color: var(--muted);
+            text-transform: lowercase;
+        }
+
+        .copy-btn {
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 0.7rem;
+            cursor: pointer;
+            padding: 0.15rem 0.25rem;
+        }
+
+        .copy-btn:hover { color: var(--fg); }
+
+        .code-card pre {
+            margin: 0;
+            padding: 0.85rem;
+            overflow-x: auto;
+            font-family: "IBM Plex Mono", ui-monospace, monospace;
+            font-size: 0.78rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .details-list {
+            list-style: none;
+            margin: 0.65rem 0 0;
+            padding: 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .details-list li {
+            display: grid;
+            grid-template-columns: 7.5rem 1fr;
+            gap: 0.75rem;
+            padding: 0.7rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.875rem;
+        }
+
+        .details-list dt,
+        .details-list .label {
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .details-list a {
+            color: var(--fg);
+            text-underline-offset: 2px;
+        }
+
+        .site-footer {
+            max-width: 68rem;
+            margin: 0 auto;
+            padding: 0 1.5rem 2.5rem;
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .site-footer a { color: var(--muted); }
     </style>
 </head>
 <body>
-    <div id="map" role="application" aria-label="Map to check if a location is on water"></div>
-    <script>
-        const startLat = 0;
-        const startLon = 0;
-        const map = L.map('map').setView([startLat, startLon], 5);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 12,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            noWrap: true,
-        }).addTo(map);
+    <header class="site-header">
+        <a class="brand" href="/">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 2.5C12 2.5 5.5 10.2 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10.2 12 2.5 12 2.5z" fill="currentColor"/>
+            </svg>
+            Is On Water
+        </a>
+        <div class="header-actions">
+            <a href="http://osbytes.io/badge" target="_blank" rel="noopener noreferrer" title="osbytes">
+                <img src="https://www.osbytes.io/badge.svg" alt="osbytes" height="22" />
+            </a>
+            <a href="https://github.com/osbytes/is-on-water" target="_blank" rel="noopener noreferrer">
+                <svg class="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98 96" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" fill="currentColor"/></svg>
+                GitHub
+            </a>
+        </div>
+    </header>
 
-        const panel = L.control({ position: 'topright' });
-        panel.onAdd = function () {
-            const div = L.DomUtil.create('div', 'info');
-            div.innerHTML = `
-                <div class="panel">
-                    <h1>Is On Water</h1>
-                    <p>Click the map or enter coordinates to check if a point is on water. Self-hostable HTTP API.</p>
-                    <form class="coords" id="coord-form">
-                        <label>lat
-                            <input id="lat-input" name="lat" type="number" step="any" min="-90" max="90" value="${startLat}" required />
-                        </label>
-                        <label>lon
-                            <input id="lon-input" name="lon" type="number" step="any" min="-180" max="180" value="${startLon}" required />
-                        </label>
-                        <button type="submit">Check</button>
-                    </form>
-                    <a class="api-link" id="api-link" href="/api/is-on-water?lat=${startLat}&lon=${startLon}" target="_blank" rel="noopener noreferrer"><strong>GET</strong> /api/is-on-water?lat=${startLat}&lon=${startLon}</a>
-                    <div class="links">
-                        <a href="/documentation" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem;">API docs</a>
-                        <a style="line-height: 1;" href="https://railway.app/template/MfUYQX?referralCode=ToZEjF" target="_blank" rel="noopener noreferrer"><img style="width: 100%;" alt="Deploy on Railway" src="https://railway.app/button.svg" /></a>
-                        <a href="https://github.com/dillonstreator/is-on-water" target="_blank" rel="noopener noreferrer">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 98 96" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" fill="#24292f"/></svg>
-                            <span style="color: gray; font-size: 0.75rem;">dillonstreator/is-on-water</span>
-                        </a>
+    <main>
+        <section class="hero">
+            <p class="eyebrow">Open source · MIT</p>
+            <h1>Is this point on water?</h1>
+            <p>Pass a latitude and longitude, get back whether it falls on water or land – seas, lakes, and rivers, worldwide. Approximate; not survey-grade.</p>
+        </section>
+
+        <div class="grid">
+            <section class="try" aria-labelledby="try-heading">
+                <div class="section-head">
+                    <h2 id="try-heading">Try it</h2>
+                    <span class="endpoint mono">GET /api/is-on-water?lat=&amp;lon=</span>
+                </div>
+
+                <form class="coords" id="coord-form">
+                    <label>lat
+                        <input id="lat-input" name="lat" type="number" step="any" min="-90" max="90" value="46.82" required />
+                    </label>
+                    <label>lon
+                        <input id="lon-input" name="lon" type="number" step="any" min="-180" max="180" value="8.22" required />
+                    </label>
+                </form>
+
+                <button class="check-btn" id="check-btn" type="submit" form="coord-form">Check</button>
+
+                <div class="response-box" aria-live="polite">
+                    <div class="response-meta">
+                        <span class="panel-label">response</span>
+                        <span>
+                            <span class="status-pill" id="status-pill">—</span>
+                            <span class="http-status" id="http-status"></span>
+                        </span>
                     </div>
-                    <p class="attribution">Water data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors via <a href="https://github.com/simonepri/geo-maps" target="_blank" rel="noopener noreferrer">geo-maps</a>. Approximate; not survey-grade.</p>
-                </div>`;
-            L.DomEvent.disableClickPropagation(div);
-            L.DomEvent.disableScrollPropagation(div);
-            return div;
-        };
-        panel.addTo(map);
+                    <pre id="response-body">{}</pre>
+                </div>
+
+                <div class="examples" id="examples" role="group" aria-label="Example locations"></div>
+            </section>
+
+            <aside class="side">
+                <section aria-labelledby="usage-heading">
+                    <h2 class="panel-label" id="usage-heading">Usage</h2>
+                    <div class="code-card">
+                        <div class="code-card-head">
+                            <span>curl</span>
+                            <button type="button" class="copy-btn" id="copy-curl">Copy</button>
+                        </div>
+                        <pre id="curl-example"></pre>
+                    </div>
+                    <div class="code-card">
+                        <div class="code-card-head">
+                            <span>response</span>
+                        </div>
+                        <pre id="curl-response"></pre>
+                    </div>
+                </section>
+
+                <section aria-labelledby="details-heading">
+                    <h2 class="panel-label" id="details-heading">Details</h2>
+                    <ul class="details-list">
+                        <li>
+                            <span class="label">Endpoints</span>
+                            <span>GET single · POST batch</span>
+                        </li>
+                        <li>
+                            <span class="label">Data source</span>
+                            <span>OpenStreetMap waterbodies via <a href="https://github.com/simonepri/geo-maps" target="_blank" rel="noopener noreferrer">geo-maps</a> (~2017)</span>
+                        </li>
+                        <li>
+                            <span class="label">Accuracy</span>
+                            <span>Approximate shoreline; not survey-grade</span>
+                        </li>
+                        <li>
+                            <span class="label">Auth</span>
+                            <span>No API key required</span>
+                        </li>
+                        <li>
+                            <span class="label">Docs</span>
+                            <span><a href="/documentation">/documentation</a></span>
+                        </li>
+                        <li>
+                            <span class="label">License</span>
+                            <span>MIT (map data ODbL)</span>
+                        </li>
+                        <li>
+                            <span class="label">Deploy</span>
+                            <span><a href="https://railway.com/deploy/MfUYQX?referralCode=ToZEjF&amp;utm_medium=integration&amp;utm_source=template&amp;utm_campaign=generic" target="_blank" rel="noopener noreferrer">Railway template</a></span>
+                        </li>
+                    </ul>
+                </section>
+            </aside>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        Water data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors via <a href="https://github.com/simonepri/geo-maps" target="_blank" rel="noopener noreferrer">geo-maps</a> (ODbL). Approximate; not survey-grade.
+    </footer>
+
+    <script>
+        const EXAMPLES = [
+            { name: 'Atlantic Ocean', lat: 20.112682, lon: -37.048647, water: true },
+            { name: 'Nebraska', lat: 40.292097, lon: -98.613164, water: false },
+            { name: 'Mediterranean Sea', lat: 35.2, lon: 18.5, water: true },
+            { name: 'Swiss Alps', lat: 46.82, lon: 8.22, water: false },
+        ];
 
         const latInput = document.getElementById('lat-input');
         const lonInput = document.getElementById('lon-input');
-        const apiLink = document.getElementById('api-link');
         const coordForm = document.getElementById('coord-form');
+        const checkBtn = document.getElementById('check-btn');
+        const statusPill = document.getElementById('status-pill');
+        const httpStatus = document.getElementById('http-status');
+        const responseBody = document.getElementById('response-body');
+        const examplesEl = document.getElementById('examples');
+        const curlExample = document.getElementById('curl-example');
+        const curlResponse = document.getElementById('curl-response');
+        const copyCurl = document.getElementById('copy-curl');
 
-        const popup = L.popup();
         let ab = new AbortController();
+        let activeExample = 'Swiss Alps';
 
-        const formatCoord = (n) => {
-            const rounded = Math.round(n * 1e6) / 1e6;
-            return String(rounded);
-        };
+        const formatCoord = (n) => String(n);
 
-        const updateApiLink = (lat, lon) => {
-            const href = `/api/is-on-water?lat=${lat}&lon=${lon}`;
-            apiLink.href = href;
-            apiLink.innerHTML = `<strong>GET</strong> ${href}`;
-        };
+        const apiPath = (lat, lon) =>
+            `/api/is-on-water?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
 
-        const createPopupContent = ({ water, lat, lon, error }) => {
-            if (error) {
-                return `<p style="margin: 0;">${error}</p>`;
-            }
-            return `<p style="margin: 0;">lat: ${lat}</p><p style="margin: 0;">lon: ${lon}</p><p style="margin: 0;">water: ${water === undefined ? "Loading…" : water}</p>`;
-        };
+        const apiUrl = (lat, lon) => `${window.location.origin}${apiPath(lat, lon)}`;
 
-        function lookup(lat, lon) {
-            ab?.abort();
-            ab = new AbortController();
-            latInput.value = formatCoord(lat);
-            lonInput.value = formatCoord(lon);
-            updateApiLink(lat, lon);
-
-            popup
-                .setLatLng([lat, lon])
-                .setContent(createPopupContent({ lat, lon }))
-                .openOn(map);
-
-            fetch(`/api/is-on-water?lat=${lat}&lon=${lon}`, { signal: ab.signal })
-                .then(async (res) => {
-                    if (res.status !== 200) {
-                        let detail = `Request failed (${res.status})`;
-                        try {
-                            const errBody = await res.json();
-                            if (errBody?.msg) detail = errBody.msg;
-                        } catch (_) {}
-                        throw new Error(detail);
-                    }
-                    return res.json();
-                })
-                .then((res) => { popup.setContent(createPopupContent(res)); })
-                .catch((e) => {
-                    if (e.name === 'AbortError' || e.message === 'The user aborted a request.') return;
-                    popup.setContent(createPopupContent({ lat, lon, error: e.message }));
-                });
+        function updateUsageExample() {
+            const sample = EXAMPLES[0];
+            curlExample.textContent = `curl "${apiUrl(sample.lat, sample.lon)}"`;
+            curlResponse.textContent = JSON.stringify(
+                { water: sample.water, lat: sample.lat, lon: sample.lon },
+                null,
+                2
+            );
         }
 
-        function onMapClick(e) {
-            const { lat, lng: lon } = e.latlng;
-            lookup(lat, lon);
+        function setActiveExample(name) {
+            activeExample = name;
+            examplesEl.querySelectorAll('.example').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.name === name);
+            });
+        }
+
+        function renderExamples() {
+            examplesEl.innerHTML = EXAMPLES.map(
+                (ex) => `
+                <button type="button" class="example${ex.name === activeExample ? ' active' : ''}" data-name="${ex.name}" data-lat="${ex.lat}" data-lon="${ex.lon}">
+                    <strong>${ex.name}</strong>
+                    <span>${ex.lat}, ${ex.lon}</span>
+                </button>`
+            ).join('');
+        }
+
+        function showResult({ water, lat, lon, status, error }) {
+            if (error) {
+                statusPill.textContent = 'error';
+                statusPill.className = 'status-pill error';
+                httpStatus.textContent = status ? ` ${status}` : '';
+                responseBody.textContent = JSON.stringify({ error }, null, 2);
+                return;
+            }
+
+            const label = water ? 'water' : 'land';
+            statusPill.textContent = label;
+            statusPill.className = `status-pill ${label}`;
+            httpStatus.textContent = status ? ` ${status}` : ' 200 OK';
+            // Show the API payload as returned (boolean water flag only).
+            responseBody.textContent = JSON.stringify({ water, lat, lon }, null, 2);
+        }
+
+        async function lookup(lat, lon, exampleName) {
+            ab.abort();
+            ab = new AbortController();
+
+            latInput.value = formatCoord(lat);
+            lonInput.value = formatCoord(lon);
+            if (exampleName) setActiveExample(exampleName);
+            else setActiveExample('');
+
+            checkBtn.disabled = true;
+            statusPill.textContent = '…';
+            statusPill.className = 'status-pill';
+            httpStatus.textContent = '';
+            responseBody.textContent = 'Loading…';
+
+            try {
+                const res = await fetch(apiPath(lat, lon), { signal: ab.signal });
+                const statusText = `${res.status} ${res.statusText || 'OK'}`.trim();
+
+                if (!res.ok) {
+                    let detail = `Request failed (${res.status})`;
+                    try {
+                        const errBody = await res.json();
+                        if (errBody?.msg) detail = errBody.msg;
+                    } catch (_) {}
+                    showResult({ status: statusText, error: detail });
+                    return;
+                }
+
+                const data = await res.json();
+                showResult({ ...data, status: statusText });
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                showResult({ error: e.message || 'Request failed' });
+            } finally {
+                checkBtn.disabled = false;
+            }
         }
 
         coordForm.addEventListener('submit', (e) => {
@@ -213,12 +625,29 @@
             const lat = Number(latInput.value);
             const lon = Number(lonInput.value);
             if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-            map.setView([lat, lon]);
             lookup(lat, lon);
         });
 
-        lookup(startLat, startLon);
-        map.on('click', onMapClick);
+        examplesEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('.example');
+            if (!btn) return;
+            lookup(Number(btn.dataset.lat), Number(btn.dataset.lon), btn.dataset.name);
+        });
+
+        copyCurl.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(curlExample.textContent);
+                copyCurl.textContent = 'Copied';
+                setTimeout(() => { copyCurl.textContent = 'Copy'; }, 1200);
+            } catch (_) {
+                copyCurl.textContent = 'Failed';
+                setTimeout(() => { copyCurl.textContent = 'Copy'; }, 1200);
+            }
+        });
+
+        renderExamples();
+        updateUsageExample();
+        lookup(46.82, 8.22, 'Swiss Alps');
     </script>
 </body>
 </html>

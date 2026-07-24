@@ -1,12 +1,14 @@
 import pino from 'pino';
 import { initApp } from './app';
 import { initConfig } from './config';
+import { initWaterLookup } from './is-on-water';
 
 import tap, { Test } from 'tap';
 import { Client } from 'undici';
 import { AddressInfo } from 'node:net';
 
 const initAppTest = async (t: Test) => {
+    await initWaterLookup();
     const config = {
         ...(await initConfig()),
         healthCheckEndpoint: '/some-health-check-endpoint',
@@ -103,19 +105,34 @@ tap.test('app', async (t) => {
         await response.body.dump();
     });
 
-    t.test('should serve the demo map', async (t) => {
+    t.test('should serve the landing page', async (t) => {
         const response = await client.request({
             method: 'GET',
             path: '/',
         });
 
         t.equal(response.statusCode, 200);
+        t.match(String(response.headers['cache-control']), /public/);
+        t.match(String(response.headers['cache-control']), /max-age=300/);
+        t.ok(response.headers.etag);
+        t.ok(response.headers['last-modified']);
+
         const body = await response.body.text();
         t.match(body, /Is On Water/);
-        t.match(body, /leaflet/i);
         t.match(body, /coord-form/);
+        t.match(body, /\/api\/is-on-water/);
+        t.match(body, /osbytes\.io\/badge/);
+        t.match(body, /github\.com\/osbytes\/is-on-water/);
         t.match(body, /OpenStreetMap/);
         t.match(body, /geo-maps/);
+
+        const cached = await client.request({
+            method: 'GET',
+            path: '/',
+            headers: { 'if-none-match': String(response.headers.etag) },
+        });
+        t.equal(cached.statusCode, 304);
+        await cached.body.dump();
     });
 
     t.test('swagger info version matches package.json', async (t) => {

@@ -53,7 +53,7 @@ tap.test('app', async (t) => {
         const lon = -37.048647;
         const response = await client.request({
             method: 'GET',
-            path: `/api/is-on-water?lat=${lat}&lon=${lon}`,
+            path: `/api/water?lat=${lat}&lon=${lon}`,
         });
 
         t.equal(response.statusCode, 200);
@@ -67,7 +67,7 @@ tap.test('app', async (t) => {
         const lon = -98.613164;
         const response = await client.request({
             method: 'GET',
-            path: `/api/is-on-water?lat=${lat}&lon=${lon}`,
+            path: `/api/water?lat=${lat}&lon=${lon}`,
         });
 
         t.equal(response.statusCode, 200);
@@ -75,34 +75,65 @@ tap.test('app', async (t) => {
         t.same(body, { lat, lon, water: false });
     });
 
-    t.test('should accept numeric zero coordinates on POST', async (t) => {
+    t.test('should accept wrapped batch body on POST', async (t) => {
         const response = await client.request({
             method: 'POST',
-            path: '/api/is-on-water',
+            path: '/api/water',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                coordinates: [{ lat: 0, lon: 0 }],
+            }),
+        });
+
+        t.equal(response.statusCode, 200);
+        const body = (await response.body.json()) as {
+            results: Array<{ water: boolean; lat: number; lon: number }>;
+        };
+        t.equal(body.results.length, 1);
+        t.equal(body.results[0].lat, 0);
+        t.equal(body.results[0].lon, 0);
+        t.type(body.results[0].water, 'boolean');
+    });
+
+    t.test('should accept bare array batch body on POST', async (t) => {
+        const response = await client.request({
+            method: 'POST',
+            path: '/api/water',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify([{ lat: 0, lon: 0 }]),
         });
 
         t.equal(response.statusCode, 200);
-        const body = (await response.body.json()) as Array<{
-            water: boolean;
-            lat: number;
-            lon: number;
-        }>;
-        t.equal(body.length, 1);
-        t.equal(body[0].lat, 0);
-        t.equal(body[0].lon, 0);
-        t.type(body[0].water, 'boolean');
+        const body = (await response.body.json()) as {
+            results: Array<{ water: boolean; lat: number; lon: number }>;
+        };
+        t.equal(body.results.length, 1);
+        t.equal(body.results[0].lat, 0);
+        t.equal(body.results[0].lon, 0);
+        t.type(body.results[0].water, 'boolean');
     });
 
-    t.test('should reject invalid latitude', async (t) => {
+    t.test('should reject invalid latitude with problem details', async (t) => {
         const response = await client.request({
             method: 'GET',
-            path: '/api/is-on-water?lat=91&lon=0',
+            path: '/api/water?lat=91&lon=0',
         });
 
         t.equal(response.statusCode, 400);
-        await response.body.dump();
+        t.match(
+            String(response.headers['content-type']),
+            /application\/problem\+json/
+        );
+        const body = (await response.body.json()) as {
+            type: string;
+            title: string;
+            status: number;
+            detail: string;
+        };
+        t.equal(body.type, 'about:blank');
+        t.equal(body.title, 'Bad Request');
+        t.equal(body.status, 400);
+        t.type(body.detail, 'string');
     });
 
     t.test('should serve the landing page', async (t) => {
@@ -120,7 +151,7 @@ tap.test('app', async (t) => {
         const body = await response.body.text();
         t.match(body, /Is On Water/);
         t.match(body, /coord-form/);
-        t.match(body, /\/api\/is-on-water/);
+        t.match(body, /\/api\/water/);
         t.match(body, /osbytes\.io\/badge/);
         t.match(body, /github\.com\/osbytes\/is-on-water/);
         t.match(body, /OpenStreetMap/);
@@ -150,8 +181,10 @@ tap.test('app', async (t) => {
         t.equal(response.statusCode, 200);
         const body = (await response.body.json()) as {
             info: { title: string; version: string };
+            paths: Record<string, unknown>;
         };
         t.equal(body.info.title, 'is-on-water');
         t.equal(body.info.version, version);
+        t.ok(body.paths['/api/water']);
     });
 });

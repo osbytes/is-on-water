@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import Fastify, { FastifyError } from 'fastify';
+import Fastify, { FastifyError, FastifyReply } from 'fastify';
 import pino from 'pino';
 import helmet from '@fastify/helmet';
 import compression from '@fastify/compress';
@@ -37,11 +37,74 @@ const coordinateSchema = z.object({
     lon: z.coerce.number().min(-180).max(180),
 });
 
-const isOnWaterResultSchema = z.object({
+const waterResultSchema = z.object({
     water: z.boolean(),
     lat: z.number(),
     lon: z.number(),
 });
+
+const batchRequestSchema = (maxBatchSize: number) =>
+    z.union([
+        z.array(coordinateSchema).min(1).max(maxBatchSize),
+        z.object({
+            coordinates: z
+                .array(coordinateSchema)
+                .min(1)
+                .max(maxBatchSize),
+        }),
+    ]);
+
+const batchResponseSchema = z.object({
+    results: z.array(waterResultSchema),
+});
+
+const problemDetailsSchema = z.object({
+    type: z.string(),
+    title: z.string(),
+    status: z.number(),
+    detail: z.string(),
+});
+
+const PROBLEM_JSON = 'application/problem+json';
+
+const httpTitle = (statusCode: number): string => {
+    switch (statusCode) {
+        case 400:
+            return 'Bad Request';
+        case 404:
+            return 'Not Found';
+        case 413:
+            return 'Payload Too Large';
+        case 429:
+            return 'Too Many Requests';
+        case 503:
+            return 'Service Unavailable';
+        default:
+            return statusCode >= 500 ? 'Internal Server Error' : 'Error';
+    }
+};
+
+const sendProblem = (
+    res: FastifyReply,
+    statusCode: number,
+    detail: string
+) => {
+    return res
+        .status(statusCode)
+        .type(PROBLEM_JSON)
+        .send({
+            type: 'about:blank',
+            title: httpTitle(statusCode),
+            status: statusCode,
+            detail,
+        });
+};
+
+const normalizeBatchCoordinates = (
+    body:
+        | Array<{ lat: number; lon: number }>
+        | { coordinates: Array<{ lat: number; lon: number }> }
+) => (Array.isArray(body) ? body : body.coordinates);
 
 export const initApp = async (config: Config, logger: pino.Logger) => {
     const redis = config.redisUrl
@@ -153,10 +216,10 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
             try {
                 const pong = await redis.ping();
                 if (pong !== 'PONG') {
-                    return res.status(503).send({ msg: 'Redis unavailable' });
+                    return sendProblem(res, 503, 'Redis unavailable');
                 }
             } catch {
-                return res.status(503).send({ msg: 'Redis unavailable' });
+                return sendProblem(res, 503, 'Redis unavailable');
             }
         }
         res.status(200).send();
@@ -171,13 +234,16 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
         });
     });
 
-    app.withTypeProvider<ZodTypeProvider>().route({
+    const typed = app.withTypeProvider<ZodTypeProvider>();
+
+    typed.route({
         method: 'GET',
-        url: '/api/is-on-water',
+        url: '/api/water',
         schema: {
             querystring: coordinateSchema,
             response: {
-                200: isOnWaterResultSchema,
+                200: waterResultSchema,
+                400: problemDetailsSchema,
             },
         },
         handler(req, res) {
@@ -185,24 +251,23 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
         },
     });
 
-    app.withTypeProvider<ZodTypeProvider>().route({
+    typed.route({
         method: 'POST',
-        url: '/api/is-on-water',
+        url: '/api/water',
         config: {
             // Allow larger batches than the default 1kb body limit
             bodyLimit: 1024 * 100,
         },
         schema: {
-            body: z
-                .array(coordinateSchema)
-                .min(1)
-                .max(config.maxBatchSize),
+            body: batchRequestSchema(config.maxBatchSize),
             response: {
-                200: z.array(isOnWaterResultSchema),
+                200: batchResponseSchema,
+                400: problemDetailsSchema,
             },
         },
         handler(req, res) {
-            res.send(req.body.map(isOnWater));
+            const coordinates = normalizeBatchCoordinates(req.body);
+            res.send({ results: coordinates.map(isOnWater) });
         },
     });
 
@@ -214,18 +279,16 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
         const statusCode = error.statusCode ?? 500;
 
         if (statusCode === 429) {
-            res.status(429).send({ msg: 'Rate limit exceeded' });
+            sendProblem(res, 429, 'Rate limit exceeded');
             return;
         }
 
         if (statusCode >= 400 && statusCode < 500) {
-            res.status(statusCode).send({
-                msg: error.message || 'Bad request',
-            });
+            sendProblem(res, statusCode, error.message || 'Bad request');
             return;
         }
 
-        res.status(500).send({ msg: 'Something went wrong' });
+        sendProblem(res, 500, 'Something went wrong');
     });
 
     await app.ready();

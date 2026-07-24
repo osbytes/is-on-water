@@ -420,7 +420,7 @@
             <section class="try" aria-labelledby="try-heading">
                 <div class="section-head">
                     <h2 id="try-heading">Try it</h2>
-                    <span class="endpoint mono">GET /api/is-on-water?lat=&amp;lon=</span>
+                    <span class="endpoint mono">GET /api/water?lat=&amp;lon=</span>
                 </div>
 
                 <form class="coords" id="coord-form">
@@ -533,7 +533,7 @@
         const formatCoord = (n) => String(n);
 
         const apiPath = (lat, lon) =>
-            `/api/is-on-water?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+            `/api/water?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
 
         const apiUrl = (lat, lon) => `${window.location.origin}${apiPath(lat, lon)}`;
 
@@ -604,7 +604,8 @@
                     let detail = `Request failed (${res.status})`;
                     try {
                         const errBody = await res.json();
-                        if (errBody?.msg) detail = errBody.msg;
+                        if (errBody?.detail) detail = errBody.detail;
+                        else if (errBody?.msg) detail = errBody.msg;
                     } catch (_) {}
                     showResult({ status: statusText, error: detail });
                     return;

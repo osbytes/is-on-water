@@ -1,5 +1,11 @@
 # is-on-water
 
+## 1.2.0
+
+### Minor Changes
+
+- 712ac1b: Redesign the landing page for osbytes branding, serve waterbodies from FlatGeobuf, and clarify request log field names.
+
 ## 1.1.1
 
 ### Patch Changes

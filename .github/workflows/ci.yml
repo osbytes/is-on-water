@@ -36,3 +36,12 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t is-on-water:ci .

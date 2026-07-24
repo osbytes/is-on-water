@@ -1,3 +1,6 @@
 dist
 node_modules
 .tap
+data/_waterbodies.exploded.geojson
+data/_waterbodies.fc.geojson
+data/waterbodies.fgb

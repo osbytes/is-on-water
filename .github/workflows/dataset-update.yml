@@ -1,0 +1,79 @@
+name: Dataset update
+
+on:
+  schedule:
+    # 06:17 UTC on the 1st of each month
+    - cron: '17 6 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dataset-update
+  cancel-in-progress: false
+
+jobs:
+  check-and-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for dataset updates and rebuild
+        id: dataset
+        env:
+          # Prefer GDAL-backed FlatGeobuf (spatial index) in CI.
+          FGB_BUILDER: gdal
+        run: |
+          docker pull ghcr.io/osgeo/gdal:alpine-small-latest
+          node scripts/check-dataset-update.js
+
+      - name: Validate rebuilt dataset
+        if: steps.dataset.outputs.updated == 'true'
+        run: |
+          pnpm exec tsc --noEmit
+          pnpm test
+          pnpm build
+
+      - name: Create pull request
+        if: steps.dataset.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/dataset-update
+          delete-branch: true
+          title: 'chore: update waterbodies dataset to ${{ steps.dataset.outputs.source_version }}'
+          commit-message: |
+            chore: update waterbodies FlatGeobuf to ${{ steps.dataset.outputs.source_version }}
+
+            Rebuilt from ${{ steps.dataset.outputs.source_version }} (${{ steps.dataset.outputs.feature_count }} features).
+          body: |
+            ## Summary
+            - Detected an updated `@geo-maps/earth-waterbodies-1m` package (or source content hash change)
+            - Rebuilt `data/waterbodies.fgb.gz` and `data/manifest.json`
+            - Previous version: `${{ steps.dataset.outputs.previous_version }}`
+            - New version: `${{ steps.dataset.outputs.source_version }}`
+            - Feature count: `${{ steps.dataset.outputs.feature_count }}`
+
+            ## Test plan
+            - [x] `pnpm test` (includes dataset validation fixtures)
+            - [x] `pnpm build`
+            - [ ] Spot-check critical fixtures on the demo map after merge
+
+            Automated monthly dataset refresh.
+          labels: |
+            dataset
+            automated

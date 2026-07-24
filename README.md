@@ -8,7 +8,7 @@ Built on [Fastify](https://fastify.dev/) with optional OpenTelemetry, Swagger at
 ## Installation
 
 ```sh
-git clone https://github.com/dillonstreator/is-on-water
+git clone https://github.com/osbytes/is-on-water
 
 cd is-on-water
 
@@ -71,7 +71,15 @@ curl -X POST http://localhost:3000/api/is-on-water \
 
 ## Data
 
-Water polygons come from [`@geo-maps/earth-waterbodies-1m`](https://www.npmjs.com/package/@geo-maps/earth-waterbodies-1m) (OpenStreetMap-derived GeoJSON, package vintage 2017). The “1m” label is the upstream Douglas–Peucker simplification tolerance, **not** a measured shoreline accuracy SLA. Treat results as approximate.
+Water polygons are stored as gzip-compressed FlatGeobuf in [`data/waterbodies.fgb.gz`](./data/waterbodies.fgb.gz), built from [`@geo-maps/earth-waterbodies-1m`](https://www.npmjs.com/package/@geo-maps/earth-waterbodies-1m) (OpenStreetMap-derived; package vintage ~2017). The “1m” label is the upstream Douglas–Peucker simplification tolerance, **not** a measured shoreline accuracy SLA. Treat results as approximate.
+
+Rebuild locally:
+
+```sh
+pnpm dataset:build
+```
+
+Uses GDAL via Docker when available (`FGB_BUILDER=gdal`); otherwise falls back to the JS FlatGeobuf serializer (`FGB_BUILDER=js`). A monthly GitHub Action checks npm for source updates, rebuilds `data/`, runs the dataset validation suite, and opens a PR when something changed.
 
 © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Data licensed under [ODbL](https://opendatacommons.org/licenses/odbl/).
 

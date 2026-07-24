@@ -1,0 +1,85 @@
+{
+  "description": "Ground-truth lat/lng samples used to validate waterbody datasets. critical=true fixtures must not change classification across dataset refreshes.",
+  "fixtures": [
+    {
+      "id": "mid-atlantic",
+      "lat": 20.112682,
+      "lon": -37.048647,
+      "water": true,
+      "critical": true,
+      "note": "Open ocean; used by existing API smoke test"
+    },
+    {
+      "id": "nebraska-plains",
+      "lat": 40.292097,
+      "lon": -98.613164,
+      "water": false,
+      "critical": true,
+      "note": "Continental interior land; used by existing API smoke test"
+    },
+    {
+      "id": "pacific-gyre",
+      "lat": 0.0,
+      "lon": -150.0,
+      "water": true,
+      "critical": true,
+      "note": "Central Pacific"
+    },
+    {
+      "id": "sahara",
+      "lat": 24.0,
+      "lon": 10.0,
+      "water": false,
+      "critical": true,
+      "note": "Sahara desert"
+    },
+    {
+      "id": "siberia",
+      "lat": 62.0,
+      "lon": 100.0,
+      "water": false,
+      "critical": true,
+      "note": "Interior Siberia"
+    },
+    {
+      "id": "southern-ocean",
+      "lat": -55.0,
+      "lon": 0.0,
+      "water": true,
+      "critical": true,
+      "note": "Southern Ocean"
+    },
+    {
+      "id": "lake-superior",
+      "lat": 47.7,
+      "lon": -87.5,
+      "water": true,
+      "critical": false,
+      "note": "Large inland lake; soft fixture near shoreline complexity"
+    },
+    {
+      "id": "caspian-sea",
+      "lat": 41.5,
+      "lon": 51.0,
+      "water": true,
+      "critical": false,
+      "note": "Caspian Sea interior"
+    },
+    {
+      "id": "amazon-basin-land",
+      "lat": -5.0,
+      "lon": -65.0,
+      "water": false,
+      "critical": true,
+      "note": "Amazon basin land (away from main stem)"
+    },
+    {
+      "id": "himalayas",
+      "lat": 28.0,
+      "lon": 86.9,
+      "water": false,
+      "critical": true,
+      "note": "High-elevation land near Everest"
+    }
+  ]
+}

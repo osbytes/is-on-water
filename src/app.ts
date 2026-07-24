@@ -20,6 +20,7 @@ import fastifySwaggerUI from '@fastify/swagger-ui';
 
 import { Config } from './config';
 import { isOnWater } from './is-on-water';
+import { AppLogController } from './logging';
 
 const { name: packageName, version: packageVersion } = JSON.parse(
     readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
@@ -60,6 +61,7 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
 
     const app = Fastify({
         loggerInstance: logger,
+        logController: new AppLogController(),
         trustProxy: config.trustProxy,
         bodyLimit: 1024,
         genReqId: () => randomUUID(),
@@ -72,7 +74,7 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
             info: {
                 title: packageName,
                 description:
-                    'Check whether a geographic coordinate is on water (seas, lakes, and rivers). Water polygons © OpenStreetMap contributors via geo-maps; shoreline accuracy is approximate.',
+                    'Check whether a geographic coordinate is on water (seas, lakes, and rivers). Water polygons © OpenStreetMap contributors (via geo-maps FlatGeobuf); shoreline accuracy is approximate.',
                 version: packageVersion,
             },
             servers: [],
@@ -83,12 +85,18 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
     await app.register(helmet, {
         contentSecurityPolicy: {
             directives: {
-                'script-src': ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
-                'style-src': ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+                'script-src': ["'self'", "'unsafe-inline'"],
+                'style-src': [
+                    "'self'",
+                    "'unsafe-inline'",
+                    'https://fonts.googleapis.com',
+                ],
+                'font-src': ["'self'", 'https://fonts.gstatic.com'],
                 'img-src': [
                     "'self'",
                     'data:',
-                    'https://tile.openstreetmap.org',
+                    'https://osbytes.io',
+                    'https://www.osbytes.io',
                     'https://railway.app',
                 ],
                 'connect-src': ["'self'"],
@@ -120,6 +128,11 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
         root: path.join(__dirname, 'public'),
         wildcard: false,
         index: false,
+        // Landing HTML changes only on deploy; short TTL + ETag/Last-Modified.
+        maxAge: '5 minutes',
+        etag: true,
+        lastModified: true,
+        cacheControl: true,
     });
 
     await app.after();
@@ -150,7 +163,12 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
     });
 
     app.get('/', (_req, res) => {
-        return res.sendFile('index.html');
+        return res.sendFile('index.html', {
+            maxAge: '5 minutes',
+            etag: true,
+            lastModified: true,
+            cacheControl: true,
+        });
     });
 
     app.withTypeProvider<ZodTypeProvider>().route({

@@ -1,5 +1,11 @@
 # is-on-water
 
+## 1.3.0
+
+### Minor Changes
+
+- 492a891: Rename the API to `/api/water`, wrap batch payloads, and return RFC 9457 problem details.
+
 ## 1.2.0
 
 ### Minor Changes

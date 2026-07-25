@@ -36,9 +36,8 @@ jobs:
       - name: Check for dataset updates and rebuild
         id: dataset
         env:
-          OSM_SIMPLIFY: '0.003'
-          LAKES_SIMPLIFY: '0.003'
-          LAKES_MIN_AREA_KM2: '2'
+          BUILD_LAYERS: 'oceans:medium,lakes:medium'
+          BUNDLED_LAYERS: 'oceans:medium,lakes:medium'
         run: |
           docker pull ghcr.io/osgeo/gdal:alpine-normal-latest
           node scripts/check-dataset-update.js
@@ -58,16 +57,16 @@ jobs:
           delete-branch: true
           title: 'chore: update waterbodies dataset (${{ steps.dataset.outputs.source_version }})'
           commit-message: |
-            chore: update waterbodies FlatGeobuf (${{ steps.dataset.outputs.source_version }})
+            chore: update bundled water layers (${{ steps.dataset.outputs.source_version }})
 
-            Rebuilt from osmdata water-polygons (${{ steps.dataset.outputs.feature_count }} polygon parts).
+            Rebuilt from osmdata water-polygons (${{ steps.dataset.outputs.feature_count }} features).
           body: |
             ## Summary
             - Detected an updated `water-polygons-split-4326` zip on osmdata.openstreetmap.de
-            - Rebuilt `data/waterbodies.fgb.gz` and `data/manifest.json` (OSM oceans + HydroLAKES)
+            - Rebuilt the bundled layers in `data/layers/` and refreshed `data/layers.json`
             - Previous: `${{ steps.dataset.outputs.previous_version }}`
             - New: `${{ steps.dataset.outputs.source_version }}`
-            - Feature/part count: `${{ steps.dataset.outputs.feature_count }}`
+            - Bundled feature count: `${{ steps.dataset.outputs.feature_count }}`
 
             ## Test plan
             - [x] `pnpm test` (includes dataset validation fixtures)

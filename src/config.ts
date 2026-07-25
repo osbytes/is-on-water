@@ -12,10 +12,19 @@ export type Config = {
     rateLimitMax: number;
     maxBatchSize: number;
     trustProxy: boolean;
+    /** `WATER_LAYERS` spec, e.g. "oceans:high,lakes:medium". Empty uses the registry default. */
+    waterLayers?: string;
+    /** Override the bundled layer registry to add self-hosted artifacts. */
+    layerRegistryPath?: string;
+    /** Where downloaded (non-bundled) layers are cached between restarts. */
+    layerCacheDir?: string;
 }
 
 export const initConfig = async (): Promise<Config> => {
     const redisUrl = process.env.REDIS_URL?.trim();
+    const waterLayers = process.env.WATER_LAYERS?.trim();
+    const layerRegistryPath = process.env.WATER_LAYERS_REGISTRY?.trim();
+    const layerCacheDir = process.env.WATER_LAYER_CACHE_DIR?.trim();
 
     return {
         shutdownTimeoutMs: parseInt(process.env.SHUTDOWN_TIMEOUT_MS || "30000"),
@@ -28,6 +37,9 @@ export const initConfig = async (): Promise<Config> => {
         rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || "100"),
         maxBatchSize: parseInt(process.env.MAX_BATCH_SIZE || "500"),
         trustProxy: (process.env.TRUST_PROXY?.toLowerCase() || "true") === "true",
+        waterLayers: waterLayers || undefined,
+        layerRegistryPath: layerRegistryPath || undefined,
+        layerCacheDir: layerCacheDir || undefined,
     }
 }
 

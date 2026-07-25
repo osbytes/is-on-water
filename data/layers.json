@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-25T14:53:08.103Z",
+  "builder": "docker-gdal",
+  "defaultSelection": "oceans:medium,lakes:medium",
+  "features": {
+    "oceans": {
+      "defaultPrecision": "medium",
+      "description": "Oceans and seas, from the OSM coastline water polygons"
+    },
+    "lakes": {
+      "defaultPrecision": "medium",
+      "description": "Inland lakes and reservoirs, from HydroLAKES v1.0"
+    }
+  },
+  "sources": [
+    {
+      "id": "osm-water-polygons",
+      "feature": "oceans",
+      "source": "osmdata.openstreetmap.de",
+      "sourceDataset": "water-polygons-split-4326",
+      "sourceUrl": "https://osmdata.openstreetmap.de/download/water-polygons-split-4326.zip",
+      "sourceLastModified": "2026-07-24T03:38:11.000Z",
+      "sourceEtag": "\"35cdae67-657531a0e75ff\"",
+      "sourceZipSha256": "cd8ff50abae5f1d1db06850187ad08ba0ce586ae4a9e0c2db8e65ca4e874cf2d",
+      "license": "ODbL"
+    },
+    {
+      "id": "hydrolakes",
+      "feature": "lakes",
+      "source": "HydroSHEDS / HydroLAKES v1.0",
+      "sourceDataset": "HydroLAKES_polys_v10",
+      "sourceUrl": "https://data.hydrosheds.org/file/HydroLAKES/HydroLAKES_polys_v10_shp.zip",
+      "sourceLastModified": null,
+      "sourceEtag": null,
+      "sourceZipSha256": "9ef63498569dd7ccd0b8d8852da026e009a75f42d293f00e483f3b9fcfe8e1f9",
+      "license": "CC-BY-4.0",
+      "citation": "Messager et al. (2016) Nature Communications 7:13603"
+    }
+  ],
+  "artifacts": [
+    {
+      "feature": "lakes",
+      "precision": "medium",
+      "delivery": "bundled",
+      "file": "layers/lakes-medium.fgb.gz",
+      "sha256": "66af9b8c9018a1bb89c938b804fabb59a229d4c42c88933dca04cc057dfde320",
+      "bytes": 66712296,
+      "gzipBytes": 43649556,
+      "featureCount": 90681,
+      "simplifyToleranceDeg": "0.003",
+      "minAreaKm2": "2",
+      "source": "HydroSHEDS / HydroLAKES v1.0",
+      "license": "CC-BY-4.0",
+      "attribution": "HydroLAKES v1.0 (Messager et al. 2016)",
+      "scope": "lakes ≥ 2 km²; ~333 m shoreline detail",
+      "citation": "Messager et al. (2016) Nature Communications 7:13603"
+    },
+    {
+      "feature": "oceans",
+      "precision": "medium",
+      "delivery": "bundled",
+      "file": "layers/oceans-medium.fgb.gz",
+      "sha256": "33cd9fae478991178ec1dedfe7f46ec5e9a0380509699100daaf3776318ff238",
+      "bytes": 86441592,
+      "gzipBytes": 53994500,
+      "featureCount": 53328,
+      "simplifyToleranceDeg": "0.003",
+      "minAreaKm2": null,
+      "source": "osmdata.openstreetmap.de",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors",
+      "scope": "Oceans and seas; ~333 m shoreline detail"
+    }
+  ]
+}

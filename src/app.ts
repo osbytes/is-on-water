@@ -19,7 +19,7 @@ import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUI from '@fastify/swagger-ui';
 
 import { Config } from './config';
-import { isOnWater } from './is-on-water';
+import { getLoadedLayers, isOnWater } from './is-on-water';
 import { AppLogController } from './logging';
 
 const { name: packageName, version: packageVersion } = JSON.parse(
@@ -41,6 +41,30 @@ const waterResultSchema = z.object({
     water: z.boolean(),
     lat: z.number(),
     lon: z.number(),
+    layer: z
+        .string()
+        .nullable()
+        .describe(
+            'Which enabled layer matched (e.g. "lakes:medium"), or null when the coordinate is not on water in any enabled layer.'
+        ),
+});
+
+const layerSummarySchema = z.object({
+    id: z.string(),
+    feature: z.string(),
+    precision: z.string(),
+    delivery: z.string(),
+    scope: z.string().optional(),
+    license: z.string(),
+    attribution: z.string().optional(),
+    citation: z.string().optional(),
+    simplifyToleranceDeg: z.string().nullish(),
+    minAreaKm2: z.string().nullish(),
+    featureCount: z.number().optional(),
+});
+
+const layersResponseSchema = z.object({
+    layers: z.array(layerSummarySchema),
 });
 
 const batchRequestSchema = (maxBatchSize: number) =>
@@ -137,7 +161,7 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
             info: {
                 title: packageName,
                 description:
-                    'Check whether a geographic coordinate is on water (oceans, seas, and inland lakes/reservoirs ≥ ~2 km²). Water polygons © OpenStreetMap contributors (osmdata.openstreetmap.de) and HydroLAKES (Messager et al. 2016, CC-BY 4.0); shoreline accuracy is approximate. Smaller ponds and most rivers are not covered.',
+                    'Check whether a geographic coordinate is on water. Coverage is configurable per deployment: each instance enables a set of water layers, and GET /api/layers reports exactly which ones are active. The default set is oceans and seas (OSM coastline water polygons, © OpenStreetMap contributors, ODbL) plus inland lakes and reservoirs ≥ 2 km² (HydroLAKES; Messager et al. 2016, CC-BY 4.0). Shoreline accuracy is approximate, and a false result means "not in any enabled layer" rather than a guarantee of dry land.',
                 version: packageVersion,
             },
             servers: [],
@@ -246,8 +270,8 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
                 400: problemDetailsSchema,
             },
         },
-        handler(req, res) {
-            res.send(isOnWater(req.query));
+        async handler(req, res) {
+            res.send(await isOnWater(req.query));
         },
     });
 
@@ -265,9 +289,26 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
                 400: problemDetailsSchema,
             },
         },
-        handler(req, res) {
+        async handler(req, res) {
             const coordinates = normalizeBatchCoordinates(req.body);
-            res.send({ results: coordinates.map(isOnWater) });
+            const results = [];
+            for (const coordinate of coordinates) {
+                results.push(await isOnWater(coordinate));
+            }
+            res.send({ results });
+        },
+    });
+
+    typed.route({
+        method: 'GET',
+        url: '/api/layers',
+        schema: {
+            response: {
+                200: layersResponseSchema,
+            },
+        },
+        handler(_req, res) {
+            res.send({ layers: getLoadedLayers() });
         },
     });
 

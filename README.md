@@ -1,6 +1,8 @@
 # `is-on-water`
 
-Check whether a geographic coordinate is on water (oceans, seas, and inland lakes/reservoirs ≥ ~2 km²). Exposed via an HTTP API for single coordinate (`GET /api/water?lat=${lat}&lon=${lon}`) and batch (`POST /api/water` with `{ "coordinates": [{ lat, lon }, ...] }`) lookups. Smaller ponds and most rivers are not covered.
+Check whether a geographic coordinate is on water. Exposed via an HTTP API for single coordinate (`GET /api/water?lat=${lat}&lon=${lon}`) and batch (`POST /api/water` with `{ "coordinates": [{ lat, lon }, ...] }`) lookups.
+
+Coverage is opt-in per deployment. Out of the box you get oceans, seas, and inland lakes ≥ 2 km²; you can trade artifact size for finer shorelines and smaller water bodies by enabling additional layers. See [Coverage layers](#coverage-layers).
 
 Built on [Fastify](https://fastify.dev/) with optional OpenTelemetry, Swagger at `/documentation`, and rate limiting (in-memory by default; Redis when `REDIS_URL` is set).
 
@@ -56,8 +58,10 @@ curl "http://localhost:3000/api/water?lat=20.112682&lon=-37.048647"
 ```
 
 ```json
-{ "water": true, "lat": 20.112682, "lon": -37.048647 }
+{ "water": true, "lat": 20.112682, "lon": -37.048647, "layer": "oceans:medium" }
 ```
+
+`layer` names the enabled layer that matched, or is `null` when the coordinate is not on water in any enabled layer. Because coverage is configurable, `"water": false` means "not found in the layers this instance has enabled" rather than a guarantee of dry land.
 
 Latitude must be between -90 and 90; longitude between -180 and 180.
 
@@ -74,26 +78,83 @@ curl -X POST http://localhost:3000/api/water \
 ```json
 {
   "results": [
-    { "water": true, "lat": 20.112682, "lon": -37.048647 },
-    { "water": false, "lat": 40.292097, "lon": -98.613164 }
+    { "water": true, "lat": 20.112682, "lon": -37.048647, "layer": "oceans:medium" },
+    { "water": false, "lat": 40.292097, "lon": -98.613164, "layer": null }
   ]
 }
 ```
 
+### GET `/api/layers`
+
+Reports which layers this instance has enabled, so a client can interpret a `false` result.
+
+```json
+{
+  "layers": [
+    {
+      "id": "oceans:medium",
+      "feature": "oceans",
+      "precision": "medium",
+      "delivery": "bundled",
+      "scope": "Oceans and seas; ~333 m shoreline detail",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors"
+    }
+  ]
+}
+```
+
+## Coverage layers
+
+Coverage is addressed as `{feature}:{precision}` pairs. A **feature** is a kind of water; a **precision** controls how much geometric detail the artifact keeps and, for lakes, how small a water body has to be before it is dropped. Higher precision therefore means both finer shorelines *and* more water bodies — at the cost of a larger artifact.
+
+| Feature  | Source                                                                                     | License   |
+| -------- | ------------------------------------------------------------------------------------------ | --------- |
+| `oceans` | [OSM coastline water polygons](https://osmdata.openstreetmap.de/data/water-polygons.html)   | ODbL      |
+| `lakes`  | [HydroLAKES v1.0](https://www.hydrosheds.org/products/hydrolakes)                            | CC-BY 4.0 |
+
+| Precision | Simplify tolerance | Lake minimum area |
+| --------- | ------------------ | ----------------- |
+| `low`     | 0.01° (~1.1 km)    | 10 km²            |
+| `medium`  | 0.003° (~330 m)    | 2 km²             |
+| `high`    | 0.0008° (~89 m)    | 0.5 km²           |
+| `full`    | none               | 0.1 km² (source floor) |
+
+Select layers with `WATER_LAYERS`:
+
+```sh
+WATER_LAYERS=oceans:medium,lakes:medium   # default
+WATER_LAYERS=oceans:full,lakes:high       # finer shorelines, more lakes
+WATER_LAYERS=oceans                       # oceans only, at its default precision
+WATER_LAYERS=all                          # every feature at its default precision
+```
+
+A bare feature name uses that feature's default precision, and a feature listed more than once collapses to the highest precision requested, so `oceans:low,oceans:full` resolves to `oceans:full`.
+
+Only `oceans:medium` and `lakes:medium` ship in this repository; they are the two artifacts small enough to commit. Other combinations are published as GitHub Release assets and downloaded once at boot into `WATER_LAYER_CACHE_DIR` (default `data/_layer-cache`), where they are verified against the checksum in the registry and reused across restarts.
+
+To host artifacts yourself, or to add features this project does not ship, point `WATER_LAYERS_REGISTRY` at your own registry file modelled on [`data/layers.json`](./data/layers.json). Each artifact declares how it is delivered:
+
+- `bundled` — read from the data directory
+- `download` — fetched once at boot, checksum-verified, cached on disk
+- `range` — never downloaded; queried in place over HTTP range requests, which keeps memory near zero at the cost of network latency per query
+
 ## Data
 
-Water polygons are stored as gzip-compressed FlatGeobuf in [`data/waterbodies.fgb.gz`](./data/waterbodies.fgb.gz), merged from:
+Each layer is a gzip-compressed FlatGeobuf file under [`data/layers/`](./data/layers), catalogued in [`data/layers.json`](./data/layers.json) with its source, license, checksum, and size.
 
-1. **Oceans & seas** — [OSM coastline water polygons](https://osmdata.openstreetmap.de/data/water-polygons.html) (ODbL)
-2. **Inland lakes & reservoirs** — [HydroLAKES v1.0](https://www.hydrosheds.org/products/hydrolakes) lakes with surface area ≥ 2 km² (CC-BY 4.0; Messager et al. 2016)
+Lookups query the FlatGeobuf packed Hilbert R-tree directly with a point-sized bounding box, so only the handful of polygons whose envelope contains the coordinate are ever parsed. Nothing is re-indexed in memory at startup.
 
-Both layers are Douglas–Peucker simplified (`OSM_SIMPLIFY` / `LAKES_SIMPLIFY`, default `0.003` degrees) so the artifact stays under GitHub’s 100 MB limit. Treat shoreline results as approximate. Ponds under 2 km² and river centerlines are out of scope (override `LAKES_MIN_AREA_KM2=0.1` for full HydroLAKES ≥ 10 ha if you host the larger artifact outside git).
+Treat shoreline results as approximate: every bundled layer is Douglas–Peucker simplified, and river centerlines are out of scope at any precision.
 
 Rebuild locally (requires Docker with a GEOS-enabled GDAL image, or `USE_HOST_OGR=1`):
 
 ```sh
-pnpm dataset:build
+pnpm dataset:build                              # the bundled layers
+BUILD_LAYERS=oceans:full,lakes:high pnpm dataset:build
 ```
+
+`BUILD_LAYERS` chooses what to build and `BUNDLED_LAYERS` chooses which of those are committed rather than published as release assets. Artifacts built by earlier runs are preserved in the registry, so building one precision does not drop the others.
 
 A monthly GitHub Action checks the OSM zip’s `Last-Modified` / ETag, rebuilds `data/`, runs the dataset validation suite, and opens a PR when something changed.
 

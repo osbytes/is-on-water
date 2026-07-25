@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+dist
+.tap
+
+# Cached upstream sources and downloaded layers; the build only needs
+# data/layers.json, data/layers/, and data/validation-fixtures.json.
+data/_*
+
+*.md
+!README.md
+.env
+.env.*
+!.env-example

@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 /**
- * Build data/waterbodies.fgb.gz (+ manifest) by merging:
+ * Build per-feature, per-precision waterbody artifacts plus data/layers.json.
+ *
+ * Sources:
  *   1. OSM coastline water polygons (oceans & seas)
- *      https://osmdata.openstreetmap.de/data/water-polygons.html
+ *      https://osmdata.openstreetmap.de/data/water-polygons.html  (ODbL)
  *   2. HydroLAKES v1.0 (inland lakes & reservoirs)
  *      https://www.hydrosheds.org/products/hydrolakes  (CC-BY 4.0)
  *
- * Defaults keep the gzip artifact under GitHub's ~100MB limit:
- *   OSM_SIMPLIFY=0.003, LAKES_SIMPLIFY=0.003, LAKES_MIN_AREA_KM2=2
+ * Each artifact is addressed as {feature}:{precision}. Precision controls both
+ * the Douglas-Peucker tolerance and, for lakes, the minimum surface area, so a
+ * higher precision means finer shorelines *and* more small water bodies.
+ *
+ *   BUILD_LAYERS=oceans:medium,lakes:medium   which artifacts to build
+ *   BUNDLED_LAYERS=oceans:medium,lakes:medium which ones ship in the repo
+ *   RELEASE_BASE_URL=...                      download URL prefix for the rest
  *
  * Requires Docker (GDAL with GEOS) unless USE_HOST_OGR=1.
  */
@@ -29,8 +36,10 @@ const { gzipSync } = require('node:zlib');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
+const LAYERS_DIR = path.join(DATA_DIR, 'layers');
 const OSM_DIR = path.join(DATA_DIR, '_osm');
 const LAKES_DIR = path.join(DATA_DIR, '_hydrolakes');
+const REGISTRY_PATH = path.join(DATA_DIR, 'layers.json');
 
 const OSM_ZIP_NAME = 'water-polygons-split-4326.zip';
 const OSM_ZIP_PATH = path.join(OSM_DIR, OSM_ZIP_NAME);
@@ -50,35 +59,75 @@ const LAKES_URL =
     process.env.HYDROLAKES_URL ||
     `https://data.hydrosheds.org/file/HydroLAKES/${LAKES_ZIP_NAME}`;
 
-const FGB_PATH = path.join(DATA_DIR, 'waterbodies.fgb');
-const FGB_GZ_PATH = path.join(DATA_DIR, 'waterbodies.fgb.gz');
-const MANIFEST_PATH = path.join(DATA_DIR, 'manifest.json');
-const TMP_OCEANS_FGB = path.join(DATA_DIR, '_oceans.tmp.fgb');
-const TMP_LAKES_FGB = path.join(DATA_DIR, '_lakes.tmp.fgb');
-
-// Budget: oceans + lakes must fit under GitHub's ~100MB file limit.
-// HydroLAKES ≥ 2 km² (~90k lakes) + OSM oceans, both DP-simplified at 0.003°.
-// For fuller HydroLAKES (≥10 ha), set LAKES_MIN_AREA_KM2=0.1 and host the
-// artifact outside git (release asset / LFS).
-const DEFAULT_OSM_SIMPLIFY = '0.003';
-const DEFAULT_LAKES_SIMPLIFY = '0.003';
-const DEFAULT_LAKES_MIN_AREA_KM2 = '2';
-const OSM_SIMPLIFY =
-    process.env.OSM_SIMPLIFY !== undefined
-        ? process.env.OSM_SIMPLIFY
-        : DEFAULT_OSM_SIMPLIFY;
-const LAKES_SIMPLIFY =
-    process.env.LAKES_SIMPLIFY !== undefined
-        ? process.env.LAKES_SIMPLIFY
-        : DEFAULT_LAKES_SIMPLIFY;
-const LAKES_MIN_AREA_KM2 =
-    process.env.LAKES_MIN_AREA_KM2 !== undefined
-        ? process.env.LAKES_MIN_AREA_KM2
-        : DEFAULT_LAKES_MIN_AREA_KM2;
-
 const GDAL_IMAGE =
     process.env.GDAL_IMAGE || 'ghcr.io/osgeo/gdal:alpine-normal-latest';
 const GITHUB_SOFT_LIMIT = 95 * 1024 * 1024;
+
+const DEFAULT_BUILD = 'oceans:medium,lakes:medium';
+const DEFAULT_BUNDLED = 'oceans:medium,lakes:medium';
+const RELEASE_BASE_URL =
+    process.env.RELEASE_BASE_URL ||
+    'https://github.com/osbytes/is-on-water/releases/download/data-v1';
+
+/**
+ * Simplify tolerances are in degrees; ~0.001° is ~111 m at the equator.
+ * Lake thresholds are HydroLAKES `Lake_area` in km² (the source floor is 0.1).
+ */
+const FEATURES = {
+    oceans: {
+        defaultPrecision: 'medium',
+        description: 'Oceans and seas, from the OSM coastline water polygons',
+        source: 'osmdata.openstreetmap.de',
+        sourceDataset: 'water-polygons-split-4326',
+        sourceUrl: OSM_URL,
+        zipPath: OSM_ZIP_PATH,
+        zipName: OSM_ZIP_NAME,
+        shpInZip: OSM_SHP_IN_ZIP,
+        license: 'ODbL',
+        attribution: '© OpenStreetMap contributors',
+        select: null,
+        precisions: {
+            low: { simplify: '0.01' },
+            medium: { simplify: '0.003' },
+            high: { simplify: '0.0008' },
+            full: { simplify: '' },
+        },
+    },
+    lakes: {
+        defaultPrecision: 'medium',
+        description: 'Inland lakes and reservoirs, from HydroLAKES v1.0',
+        source: 'HydroSHEDS / HydroLAKES v1.0',
+        sourceDataset: 'HydroLAKES_polys_v10',
+        sourceUrl: LAKES_URL,
+        zipPath: LAKES_ZIP_PATH,
+        zipName: LAKES_ZIP_NAME,
+        shpInZip: LAKES_SHP_IN_ZIP,
+        license: 'CC-BY-4.0',
+        attribution: 'HydroLAKES v1.0 (Messager et al. 2016)',
+        citation: 'Messager et al. (2016) Nature Communications 7:13603',
+        // Drop the heavy attribute table; the runtime only needs geometry.
+        select: 'Hylak_id',
+        precisions: {
+            low: { simplify: '0.01', minAreaKm2: '10' },
+            medium: { simplify: '0.003', minAreaKm2: '2' },
+            high: { simplify: '0.0008', minAreaKm2: '0.5' },
+            full: { simplify: '', minAreaKm2: '' },
+        },
+    },
+};
+
+const scopeFor = (feature, precision, params) => {
+    const detail = params.simplify
+        ? `~${Math.round(Number(params.simplify) * 111000)} m shoreline detail`
+        : 'full source shoreline detail';
+    if (feature === 'lakes') {
+        const floor = params.minAreaKm2
+            ? `lakes ≥ ${params.minAreaKm2} km²`
+            : 'all HydroLAKES lakes (≥ 0.1 km²)';
+        return `${floor}; ${detail}`;
+    }
+    return `Oceans and seas; ${detail}`;
+};
 
 function sha256Buffer(buf) {
     return createHash('sha256').update(buf).digest('hex');
@@ -99,6 +148,49 @@ function humanBytes(n) {
     return `${v.toFixed(1)} ${units[u]}`;
 }
 
+function parseSpec(spec) {
+    return spec
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+        .map((entry) => {
+            const [feature, precision] = entry.split(':');
+            const definition = FEATURES[feature];
+            if (!definition) {
+                throw new Error(
+                    `Unknown feature "${feature}". Known: ${Object.keys(FEATURES).join(', ')}`
+                );
+            }
+            const level = precision || definition.defaultPrecision;
+            if (!definition.precisions[level]) {
+                throw new Error(
+                    `Unknown precision "${level}" for "${feature}". Known: ${Object.keys(definition.precisions).join(', ')}`
+                );
+            }
+            return { feature, precision: level };
+        });
+}
+
+/**
+ * Upstream metadata is recorded beside the zip at download time so the registry
+ * always describes the bytes we actually built from. A live HEAD would report
+ * whatever upstream published since, which would make the update checker think
+ * a stale cached build was current.
+ */
+function metaPathFor(zipPath) {
+    return `${zipPath}.meta.json`;
+}
+
+function readCachedMeta(zipPath) {
+    const metaPath = metaPathFor(zipPath);
+    if (!existsSync(metaPath)) return null;
+    try {
+        return JSON.parse(readFileSync(metaPath, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
 async function downloadTo(url, destPath, label) {
     if (existsSync(destPath)) {
         console.log(
@@ -112,6 +204,22 @@ async function downloadTo(url, destPath, label) {
     if (!res.ok || !res.body) {
         throw new Error(`Download failed for ${label}: HTTP ${res.status}`);
     }
+    const lastModifiedHeader = res.headers.get('last-modified');
+    writeFileSync(
+        metaPathFor(destPath),
+        `${JSON.stringify(
+            {
+                url,
+                lastModified: lastModifiedHeader
+                    ? new Date(lastModifiedHeader).toISOString()
+                    : null,
+                etag: res.headers.get('etag'),
+                downloadedAt: new Date().toISOString(),
+            },
+            null,
+            2
+        )}\n`
+    );
     const total = Number(res.headers.get('content-length')) || 0;
     let received = 0;
     let lastLogged = 0;
@@ -137,6 +245,16 @@ function toDockerMountPath(p) {
     return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, '/')}`;
 }
 
+/** Map a host path under the repo root to its location inside the container. */
+function toWorkPath(hostPath) {
+    if (process.env.USE_HOST_OGR === '1') return hostPath.replace(/\\/g, '/');
+    const norm = hostPath.replace(/\\/g, '/');
+    const rootNorm = ROOT.replace(/\\/g, '/');
+    return norm.startsWith(rootNorm)
+        ? `/work${norm.slice(rootNorm.length)}`
+        : norm;
+}
+
 function dockerAvailable() {
     const result = spawnSync('docker', ['info'], {
         stdio: 'ignore',
@@ -160,26 +278,12 @@ function runOgr(args) {
         throw new Error('Docker not available and USE_HOST_OGR!=1');
     }
     const mount = `${toDockerMountPath(ROOT)}:/work`;
-    const dockerArgs = args.map((a) =>
-        typeof a === 'string' ? a.replace(/\\/g, '/') : a
-    );
-    // Remap host paths under ROOT to /work/...
-    const remapped = dockerArgs.map((a) => {
-        if (typeof a !== 'string') return a;
-        const norm = a.replace(/\\/g, '/');
-        const rootNorm = ROOT.replace(/\\/g, '/');
-        if (norm.startsWith(rootNorm)) {
-            return `/work${norm.slice(rootNorm.length)}`;
-        }
-        // Windows path already converted by caller to /work/...
-        return a;
-    });
     console.log(
         `Running docker ogr2ogr (${GDAL_IMAGE}); may take several minutes with little output…`
     );
     const result = spawnSync(
         'docker',
-        ['run', '--rm', '-v', mount, GDAL_IMAGE, 'ogr2ogr', ...remapped],
+        ['run', '--rm', '-v', mount, GDAL_IMAGE, 'ogr2ogr', ...args],
         { stdio: 'inherit' }
     );
     if (result.status !== 0) {
@@ -188,123 +292,27 @@ function runOgr(args) {
     return 'docker-gdal';
 }
 
-function workPath(hostPath) {
-    // Paths passed into runOgr that live under the repo
-    return hostPath;
-}
-
-function convertLayer({
-    label,
-    zipPath,
-    zipName,
-    shpInZip,
-    simplify,
-    outputFgb,
-    where,
-    select,
-}) {
+function convertLayer({ label, definition, params, outputFgb }) {
     if (existsSync(outputFgb)) rmSync(outputFgb);
-    const src = process.env.USE_HOST_OGR === '1'
-        ? `/vsizip/${zipPath.replace(/\\/g, '/')}/${shpInZip}`
-        : `/vsizip//work/data/${path.basename(path.dirname(zipPath))}/${zipName}/${shpInZip}`;
 
-    const out =
-        process.env.USE_HOST_OGR === '1'
-            ? outputFgb
-            : `/work/data/${path.basename(outputFgb)}`;
+    const src = `/vsizip/${toWorkPath(definition.zipPath)}/${definition.shpInZip}`;
+    const out = toWorkPath(outputFgb);
 
     const args = ['-f', 'FlatGeobuf', '-nlt', 'PROMOTE_TO_MULTI'];
-    if (simplify) {
-        args.push('-simplify', simplify);
+    if (params.simplify) args.push('-simplify', params.simplify);
+    if (params.minAreaKm2) {
+        args.push('-where', `Lake_area >= ${params.minAreaKm2}`);
     }
-    if (where) {
-        args.push('-where', where);
-    }
-    // Drop heavy attribute tables; runtime only needs geometry.
-    if (select) {
-        args.push('-select', select);
-    }
+    if (definition.select) args.push('-select', definition.select);
     args.push(out, src);
 
     console.log(
         `Converting ${label}` +
-            (simplify ? ` (-simplify ${simplify})` : '') +
-            (where ? ` (where ${where})` : '') +
+            (params.simplify ? ` (-simplify ${params.simplify})` : ' (full res)') +
+            (params.minAreaKm2 ? ` (≥ ${params.minAreaKm2} km²)` : '') +
             '…'
     );
     return runOgr(args);
-}
-
-function mergeLayers(oceansFgb, lakesFgb, outputFgb) {
-    if (existsSync(outputFgb)) rmSync(outputFgb);
-
-    const oceansIn =
-        process.env.USE_HOST_OGR === '1'
-            ? oceansFgb
-            : `/work/data/${path.basename(oceansFgb)}`;
-    const lakesIn =
-        process.env.USE_HOST_OGR === '1'
-            ? lakesFgb
-            : `/work/data/${path.basename(lakesFgb)}`;
-    const out =
-        process.env.USE_HOST_OGR === '1'
-            ? outputFgb
-            : `/work/data/${path.basename(outputFgb)}`;
-
-    console.log('Merging oceans + lakes into one FlatGeobuf (ogrmerge)…');
-
-    // ogrmerge -single flattens heterogeneous attribute schemas into one layer.
-    if (process.env.USE_HOST_OGR === '1') {
-        const result = spawnSync(
-            'ogrmerge',
-            [
-                '-o',
-                out,
-                '-f',
-                'FlatGeobuf',
-                '-single',
-                '-nln',
-                'waterbodies',
-                '-overwrite_ds',
-                oceansIn,
-                lakesIn,
-            ],
-            { stdio: 'inherit', shell: process.platform === 'win32' }
-        );
-        if (result.status !== 0) {
-            throw new Error(`ogrmerge failed with status ${result.status}`);
-        }
-        return;
-    }
-    if (!dockerAvailable()) {
-        throw new Error('Docker not available and USE_HOST_OGR!=1');
-    }
-    const mount = `${toDockerMountPath(ROOT)}:/work`;
-    const result = spawnSync(
-        'docker',
-        [
-            'run',
-            '--rm',
-            '-v',
-            mount,
-            GDAL_IMAGE,
-            'ogrmerge',
-            '-o',
-            out,
-            '-f',
-            'FlatGeobuf',
-            '-single',
-            '-nln',
-            'waterbodies',
-            '-overwrite_ds',
-            oceansIn,
-            lakesIn,
-        ],
-        { stdio: 'inherit' }
-    );
-    if (result.status !== 0) {
-        throw new Error(`docker ogrmerge failed with status ${result.status}`);
-    }
 }
 
 function headMeta(url) {
@@ -320,132 +328,183 @@ function headMeta(url) {
     };
 }
 
+/** Metadata for the zip on disk, falling back to a live HEAD for older caches. */
+function sourceMetaFor(zipPath, url) {
+    return readCachedMeta(zipPath) ?? headMeta(url);
+}
+
 async function countFgbFeatures(fgbBytes) {
     const { geojson } = require('flatgeobuf');
     let featureCount = 0;
-    let polygonPartCount = 0;
     for await (const feature of geojson.deserialize(fgbBytes)) {
-        const g = feature.geometry;
-        if (!g) continue;
-        featureCount += 1;
-        if (g.type === 'Polygon') polygonPartCount += 1;
-        else if (g.type === 'MultiPolygon') {
-            polygonPartCount += g.coordinates.length;
-        }
+        if (feature.geometry) featureCount += 1;
     }
-    return { featureCount, polygonPartCount };
+    return featureCount;
+}
+
+function readExistingRegistry() {
+    if (!existsSync(REGISTRY_PATH)) return null;
+    try {
+        return JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));
+    } catch {
+        return null;
+    }
 }
 
 async function main() {
+    const toBuild = parseSpec(process.env.BUILD_LAYERS || DEFAULT_BUILD);
+    const bundled = new Set(
+        parseSpec(process.env.BUNDLED_LAYERS || DEFAULT_BUNDLED).map(
+            (s) => `${s.feature}:${s.precision}`
+        )
+    );
+
     mkdirSync(OSM_DIR, { recursive: true });
     mkdirSync(LAKES_DIR, { recursive: true });
+    mkdirSync(LAYERS_DIR, { recursive: true });
 
-    await downloadTo(OSM_URL, OSM_ZIP_PATH, OSM_ZIP_NAME);
-    await downloadTo(LAKES_URL, LAKES_ZIP_PATH, LAKES_ZIP_NAME);
-
-    const lakesWhere = LAKES_MIN_AREA_KM2
-        ? `Lake_area >= ${LAKES_MIN_AREA_KM2}`
-        : '';
-
-    const builderOceans = convertLayer({
-        label: 'OSM oceans/seas',
-        zipPath: OSM_ZIP_PATH,
-        zipName: OSM_ZIP_NAME,
-        shpInZip: OSM_SHP_IN_ZIP,
-        simplify: OSM_SIMPLIFY,
-        outputFgb: TMP_OCEANS_FGB,
-    });
-    convertLayer({
-        label: 'HydroLAKES',
-        zipPath: LAKES_ZIP_PATH,
-        zipName: LAKES_ZIP_NAME,
-        shpInZip: LAKES_SHP_IN_ZIP,
-        simplify: LAKES_SIMPLIFY,
-        outputFgb: TMP_LAKES_FGB,
-        where: lakesWhere,
-        select: 'Hylak_id',
-    });
-
-    mergeLayers(TMP_OCEANS_FGB, TMP_LAKES_FGB, FGB_PATH);
-    rmSync(TMP_OCEANS_FGB, { force: true });
-    rmSync(TMP_LAKES_FGB, { force: true });
-
-    console.log('Gzipping and writing manifest…');
-    const fgbBytes = readFileSync(FGB_PATH);
-    const gzBytes = gzipSync(fgbBytes, { level: 9 });
-    writeFileSync(FGB_GZ_PATH, gzBytes);
-    rmSync(FGB_PATH, { force: true });
-
-    const { featureCount, polygonPartCount } = await countFgbFeatures(
-        new Uint8Array(fgbBytes)
-    );
-    const osmMeta = headMeta(OSM_URL);
-    const lakesMeta = headMeta(LAKES_URL);
-    const overLimit = gzBytes.length >= GITHUB_SOFT_LIMIT;
-
-    const manifest = {
-        sources: [
-            {
-                id: 'osm-water-polygons',
-                source: 'osmdata.openstreetmap.de',
-                sourceDataset: 'water-polygons-split-4326',
-                sourceUrl: OSM_URL,
-                sourceLastModified: osmMeta.lastModified,
-                sourceEtag: osmMeta.etag,
-                sourceZipSha256: sha256File(OSM_ZIP_PATH),
-                simplifyToleranceDeg: OSM_SIMPLIFY || null,
-                license: 'ODbL',
-                scope: 'oceans-and-seas',
-            },
-            {
-                id: 'hydrolakes',
-                source: 'HydroSHEDS / HydroLAKES v1.0',
-                sourceDataset: 'HydroLAKES_polys_v10',
-                sourceUrl: LAKES_URL,
-                sourceLastModified: lakesMeta.lastModified,
-                sourceEtag: lakesMeta.etag,
-                sourceZipSha256: sha256File(LAKES_ZIP_PATH),
-                simplifyToleranceDeg: LAKES_SIMPLIFY || null,
-                minAreaKm2: LAKES_MIN_AREA_KM2 || null,
-                license: 'CC-BY-4.0',
-                scope: 'inland-lakes-and-reservoirs-ge-10ha',
-                citation:
-                    'Messager et al. (2016) Nature Communications 7:13603',
-            },
-        ],
-        // Convenience fields for update checks / tests
-        source: 'osmdata.openstreetmap.de+hydrolakes',
-        sourceDataset: 'water-polygons-split-4326+HydroLAKES_polys_v10',
-        sourceLastModified: osmMeta.lastModified,
-        sourceEtag: osmMeta.etag,
-        simplifyToleranceDeg: OSM_SIMPLIFY || null,
-        scope: 'oceans-seas-and-inland-lakes',
-        fgbSha256: sha256Buffer(fgbBytes),
-        fgbGzSha256: sha256Buffer(gzBytes),
-        featureCount,
-        polygonPartCount,
-        bytes: fgbBytes.length,
-        gzipBytes: gzBytes.length,
-        builder: builderOceans,
-        generatedAt: new Date().toISOString(),
-    };
-    writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
-
-    console.log(`Builder: ${builderOceans}`);
-    console.log(
-        `Features: ${featureCount} (polygon parts: ${polygonPartCount})`
-    );
-    console.log(
-        `Wrote ${FGB_GZ_PATH} (${humanBytes(gzBytes.length)} gzip, ${humanBytes(fgbBytes.length)} uncompressed)`
-    );
-    console.log(`Wrote ${MANIFEST_PATH}`);
-    if (overLimit) {
-        console.warn(
-            `\n⚠ gzip artifact is ${humanBytes(gzBytes.length)} — over GitHub's 100MB limit.\n` +
-                `  Raise OSM_SIMPLIFY / LAKES_SIMPLIFY, or set LAKES_MIN_AREA_KM2 (e.g. 1).`
-        );
-        process.exitCode = 1;
+    const neededFeatures = new Set(toBuild.map((s) => s.feature));
+    if (neededFeatures.has('oceans')) {
+        await downloadTo(OSM_URL, OSM_ZIP_PATH, OSM_ZIP_NAME);
     }
+    if (neededFeatures.has('lakes')) {
+        await downloadTo(LAKES_URL, LAKES_ZIP_PATH, LAKES_ZIP_NAME);
+    }
+
+    let builder = 'docker-gdal';
+    const built = [];
+    let oversized = false;
+
+    for (const { feature, precision } of toBuild) {
+        const definition = FEATURES[feature];
+        const params = definition.precisions[precision];
+        const id = `${feature}:${precision}`;
+        const base = `${feature}-${precision}`;
+        const tmpFgb = path.join(DATA_DIR, `_${base}.tmp.fgb`);
+        const gzPath = path.join(LAYERS_DIR, `${base}.fgb.gz`);
+
+        builder = convertLayer({
+            label: `${definition.description} [${id}]`,
+            definition,
+            params,
+            outputFgb: tmpFgb,
+        });
+
+        const fgbBytes = readFileSync(tmpFgb);
+        const gzBytes = gzipSync(fgbBytes, { level: 9 });
+        writeFileSync(gzPath, gzBytes);
+        rmSync(tmpFgb, { force: true });
+
+        const featureCount = await countFgbFeatures(new Uint8Array(fgbBytes));
+        const isBundled = bundled.has(id);
+
+        if (isBundled && gzBytes.length >= GITHUB_SOFT_LIMIT) {
+            oversized = true;
+            console.warn(
+                `\n⚠ ${id} is ${humanBytes(gzBytes.length)} — too large to bundle in git.\n` +
+                    `  Drop it from BUNDLED_LAYERS and publish it as a release asset instead.`
+            );
+        }
+
+        built.push({
+            feature,
+            precision,
+            delivery: isBundled ? 'bundled' : 'download',
+            ...(isBundled
+                ? { file: `layers/${base}.fgb.gz` }
+                : { url: `${RELEASE_BASE_URL}/${base}.fgb.gz` }),
+            sha256: sha256Buffer(gzBytes),
+            bytes: fgbBytes.length,
+            gzipBytes: gzBytes.length,
+            featureCount,
+            simplifyToleranceDeg: params.simplify || null,
+            minAreaKm2: params.minAreaKm2 || null,
+            source: definition.source,
+            license: definition.license,
+            attribution: definition.attribution,
+            scope: scopeFor(feature, precision, params),
+            ...(definition.citation ? { citation: definition.citation } : {}),
+        });
+
+        console.log(
+            `Wrote ${gzPath} — ${featureCount} features, ${humanBytes(gzBytes.length)} gzip (${humanBytes(fgbBytes.length)} raw)`
+        );
+    }
+
+    // Preserve artifacts built by earlier runs so building one precision does
+    // not silently drop the others from the registry.
+    const existing = readExistingRegistry();
+    const artifacts = [...built];
+    for (const prior of existing?.artifacts ?? []) {
+        const replaced = built.some(
+            (a) => a.feature === prior.feature && a.precision === prior.precision
+        );
+        if (!replaced) artifacts.push(prior);
+    }
+    artifacts.sort(
+        (a, b) =>
+            a.feature.localeCompare(b.feature) ||
+            Object.keys(FEATURES[a.feature]?.precisions ?? {}).indexOf(
+                a.precision
+            ) -
+                Object.keys(FEATURES[b.feature]?.precisions ?? {}).indexOf(
+                    b.precision
+                )
+    );
+
+    const sources = [];
+    if (neededFeatures.has('oceans')) {
+        const meta = sourceMetaFor(OSM_ZIP_PATH, OSM_URL);
+        sources.push({
+            id: 'osm-water-polygons',
+            feature: 'oceans',
+            source: FEATURES.oceans.source,
+            sourceDataset: FEATURES.oceans.sourceDataset,
+            sourceUrl: OSM_URL,
+            sourceLastModified: meta.lastModified,
+            sourceEtag: meta.etag,
+            sourceZipSha256: sha256File(OSM_ZIP_PATH),
+            license: FEATURES.oceans.license,
+        });
+    }
+    if (neededFeatures.has('lakes')) {
+        const meta = sourceMetaFor(LAKES_ZIP_PATH, LAKES_URL);
+        sources.push({
+            id: 'hydrolakes',
+            feature: 'lakes',
+            source: FEATURES.lakes.source,
+            sourceDataset: FEATURES.lakes.sourceDataset,
+            sourceUrl: LAKES_URL,
+            sourceLastModified: meta.lastModified,
+            sourceEtag: meta.etag,
+            sourceZipSha256: sha256File(LAKES_ZIP_PATH),
+            license: FEATURES.lakes.license,
+            citation: FEATURES.lakes.citation,
+        });
+    }
+
+    const registry = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        builder,
+        defaultSelection: DEFAULT_BUNDLED,
+        features: Object.fromEntries(
+            Object.entries(FEATURES).map(([name, def]) => [
+                name,
+                {
+                    defaultPrecision: def.defaultPrecision,
+                    description: def.description,
+                },
+            ])
+        ),
+        sources: sources.length ? sources : (existing?.sources ?? []),
+        artifacts,
+    };
+    writeFileSync(REGISTRY_PATH, `${JSON.stringify(registry, null, 2)}\n`);
+
+    console.log(`\nBuilder: ${builder}`);
+    console.log(`Wrote ${REGISTRY_PATH} (${artifacts.length} artifacts)`);
+    if (oversized) process.exitCode = 1;
 }
 
 main().catch((err) => {

@@ -10,7 +10,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
-const MANIFEST_PATH = path.join(DATA_DIR, 'manifest.json');
+const REGISTRY_PATH = path.join(DATA_DIR, 'layers.json');
 const OSM_URL =
     process.env.OSM_WATER_URL ||
     'https://osmdata.openstreetmap.de/download/water-polygons-split-4326.zip';
@@ -22,9 +22,9 @@ function setOutput(name, value) {
     writeFileSync(GITHUB_OUTPUT, `${name}=${value}\n`, { flag: 'a' });
 }
 
-function loadManifest() {
-    if (!existsSync(MANIFEST_PATH)) return null;
-    return JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
+function loadRegistry() {
+    if (!existsSync(REGISTRY_PATH)) return null;
+    return JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));
 }
 
 function headSourceMeta(url) {
@@ -62,14 +62,14 @@ function rebuild() {
 
 function main() {
     mkdirSync(DATA_DIR, { recursive: true });
-    const manifest = loadManifest();
+    const registry = loadRegistry();
     const remote = headSourceMeta(OSM_URL);
     console.log(`Remote OSM Last-Modified: ${remote.lastModified}`);
     console.log(`Remote OSM ETag: ${remote.etag}`);
 
-    const pinned =
-        manifest?.sources?.find((s) => s.id === 'osm-water-polygons') ||
-        manifest;
+    const pinned = registry?.sources?.find(
+        (s) => s.id === 'osm-water-polygons'
+    );
     console.log(
         `Pinned OSM Last-Modified: ${
             pinned ? pinned.sourceLastModified : '(none)'
@@ -86,7 +86,7 @@ function main() {
         remote.lastModified &&
         pinned.sourceLastModified === remote.lastModified;
 
-    if (manifest && (sameEtag || sameModified)) {
+    if (registry && (sameEtag || sameModified)) {
         console.log('Dataset is up to date.');
         setOutput('updated', 'false');
         setOutput('source_version', remote.lastModified || remote.etag || '');
@@ -96,20 +96,22 @@ function main() {
     console.log('OSM water-polygons update detected; rebuilding…');
     rebuild();
 
-    const next = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
+    const next = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));
+    const nextOsm = next.sources?.find((s) => s.id === 'osm-water-polygons');
+    const featureCount = (next.artifacts ?? [])
+        .filter((a) => a.delivery === 'bundled')
+        .reduce((sum, a) => sum + (a.featureCount ?? 0), 0);
+
     setOutput('updated', 'true');
     setOutput(
         'source_version',
-        next.sourceLastModified || next.sourceEtag || next.generatedAt
+        nextOsm?.sourceLastModified || nextOsm?.sourceEtag || next.generatedAt
     );
     setOutput(
         'previous_version',
         pinned ? pinned.sourceLastModified || pinned.sourceEtag || '' : ''
     );
-    setOutput(
-        'feature_count',
-        String(next.polygonPartCount || next.featureCount)
-    );
+    setOutput('feature_count', String(featureCount));
 }
 
 main();

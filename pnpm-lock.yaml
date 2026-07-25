@@ -91,9 +91,6 @@ importers:
       pino:
         specifier: ^9.7.0
         version: 9.14.0
-      rbush:
-        specifier: ^4.0.1
-        version: 4.0.1
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -116,9 +113,6 @@ importers:
       '@types/node':
         specifier: ^22.15.30
         version: 22.20.1
-      '@types/rbush':
-        specifier: ^4.0.0
-        version: 4.0.0
       nodemon:
         specifier: ^3.1.10
         version: 3.1.14
@@ -5727,7 +5721,8 @@ snapshots:
       pg-protocol: 1.15.0
       pg-types: 2.2.0
 
-  '@types/rbush@4.0.0': {}
+  '@types/rbush@4.0.0':
+    optional: true
 
   '@types/tedious@4.0.14':
     dependencies:
@@ -6990,11 +6985,13 @@ snapshots:
   quick-lru@6.1.2:
     optional: true
 
-  quickselect@3.0.0: {}
+  quickselect@3.0.0:
+    optional: true
 
   rbush@4.0.1:
     dependencies:
       quickselect: 3.0.0
+    optional: true
 
   react-dom@18.3.1(react@18.3.1):
     dependencies:

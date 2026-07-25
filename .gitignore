@@ -1,14 +1,12 @@
 dist
 node_modules
 .tap
-data/_waterbodies.exploded.geojson
-data/_waterbodies.fc.geojson
-data/waterbodies.fgb
+
+# Cached upstream sources (hundreds of MB each)
 data/_osm/
 data/_hydrolakes/
-data/_oceans.tmp.fgb
-data/_lakes.tmp.fgb
-data/waterbodies-osm.fgb.gz
-data/manifest-osm.json
 
-data/waterbodies-geomaps.fgb.gz
+# Intermediate GDAL output and downloaded (non-bundled) layers
+data/_*.tmp.fgb
+data/_layer-cache/
+data/layers/*.fgb

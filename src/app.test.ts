@@ -155,7 +155,7 @@ tap.test('app', async (t) => {
         t.match(body, /osbytes\.io\/badge/);
         t.match(body, /github\.com\/osbytes\/is-on-water/);
         t.match(body, /OpenStreetMap/);
-        t.match(body, /geo-maps/);
+        t.match(body, /HydroLAKES/);
 
         const cached = await client.request({
             method: 'GET',

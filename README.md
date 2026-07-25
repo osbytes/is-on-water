@@ -1,6 +1,6 @@
 # `is-on-water`
 
-Check whether a geographic coordinate is on water (seas, lakes, and rivers). Exposed via an HTTP API for single coordinate (`GET /api/water?lat=${lat}&lon=${lon}`) and batch (`POST /api/water` with `{ "coordinates": [{ lat, lon }, ...] }`) lookups.
+Check whether a geographic coordinate is on water (oceans, seas, and inland lakes/reservoirs ≥ ~2 km²). Exposed via an HTTP API for single coordinate (`GET /api/water?lat=${lat}&lon=${lon}`) and batch (`POST /api/water` with `{ "coordinates": [{ lat, lon }, ...] }`) lookups. Smaller ponds and most rivers are not covered.
 
 Built on [Fastify](https://fastify.dev/) with optional OpenTelemetry, Swagger at `/documentation`, and rate limiting (in-memory by default; Redis when `REDIS_URL` is set).
 
@@ -82,17 +82,22 @@ curl -X POST http://localhost:3000/api/water \
 
 ## Data
 
-Water polygons are stored as gzip-compressed FlatGeobuf in [`data/waterbodies.fgb.gz`](./data/waterbodies.fgb.gz), built from [`@geo-maps/earth-waterbodies-1m`](https://www.npmjs.com/package/@geo-maps/earth-waterbodies-1m) (OpenStreetMap-derived; package vintage ~2017). The “1m” label is the upstream Douglas–Peucker simplification tolerance, **not** a measured shoreline accuracy SLA. Treat results as approximate.
+Water polygons are stored as gzip-compressed FlatGeobuf in [`data/waterbodies.fgb.gz`](./data/waterbodies.fgb.gz), merged from:
 
-Rebuild locally:
+1. **Oceans & seas** — [OSM coastline water polygons](https://osmdata.openstreetmap.de/data/water-polygons.html) (ODbL)
+2. **Inland lakes & reservoirs** — [HydroLAKES v1.0](https://www.hydrosheds.org/products/hydrolakes) lakes with surface area ≥ 2 km² (CC-BY 4.0; Messager et al. 2016)
+
+Both layers are Douglas–Peucker simplified (`OSM_SIMPLIFY` / `LAKES_SIMPLIFY`, default `0.003` degrees) so the artifact stays under GitHub’s 100 MB limit. Treat shoreline results as approximate. Ponds under 2 km² and river centerlines are out of scope (override `LAKES_MIN_AREA_KM2=0.1` for full HydroLAKES ≥ 10 ha if you host the larger artifact outside git).
+
+Rebuild locally (requires Docker with a GEOS-enabled GDAL image, or `USE_HOST_OGR=1`):
 
 ```sh
 pnpm dataset:build
 ```
 
-Uses GDAL via Docker when available (`FGB_BUILDER=gdal`); otherwise falls back to the JS FlatGeobuf serializer (`FGB_BUILDER=js`). A monthly GitHub Action checks npm for source updates, rebuilds `data/`, runs the dataset validation suite, and opens a PR when something changed.
+A monthly GitHub Action checks the OSM zip’s `Last-Modified` / ETag, rebuilds `data/`, runs the dataset validation suite, and opens a PR when something changed.
 
-© [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors. Data licensed under [ODbL](https://opendatacommons.org/licenses/odbl/).
+© [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL). HydroLAKES © HydroSHEDS / Messager et al. (CC-BY 4.0).
 
 ## Releasing
 

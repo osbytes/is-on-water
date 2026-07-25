@@ -55,9 +55,12 @@ tap.test('manifest matches waterbodies FlatGeobuf', async (t) => {
     const bytes = readFgbBytes();
     const gzSize = existsSync(fgbGzPath) ? statSync(fgbGzPath).size : null;
 
-    t.equal(manifest.sourcePackage, '@geo-maps/earth-waterbodies-1m');
-    t.type(manifest.sourceVersion, 'string');
-    t.match(manifest.sourceVersion, /^\d+\.\d+\.\d+/);
+    t.equal(manifest.source, 'osmdata.openstreetmap.de+hydrolakes');
+    t.match(manifest.sourceDataset, /HydroLAKES/);
+    t.equal(manifest.scope, 'oceans-seas-and-inland-lakes');
+    t.ok(Array.isArray(manifest.sources) && manifest.sources.length >= 2);
+    t.type(manifest.sourceLastModified, 'string');
+    t.ok(manifest.simplifyToleranceDeg, 'expected a pinned simplify tolerance');
     t.equal(manifest.fgbSha256, sha256(bytes));
     t.equal(manifest.bytes, bytes.byteLength);
     if (gzSize != null && manifest.gzipBytes != null) {

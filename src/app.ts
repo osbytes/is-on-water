@@ -137,7 +137,7 @@ export const initApp = async (config: Config, logger: pino.Logger) => {
             info: {
                 title: packageName,
                 description:
-                    'Check whether a geographic coordinate is on water (seas, lakes, and rivers). Water polygons © OpenStreetMap contributors (via geo-maps FlatGeobuf); shoreline accuracy is approximate.',
+                    'Check whether a geographic coordinate is on water (oceans, seas, and inland lakes/reservoirs ≥ ~2 km²). Water polygons © OpenStreetMap contributors (osmdata.openstreetmap.de) and HydroLAKES (Messager et al. 2016, CC-BY 4.0); shoreline accuracy is approximate. Smaller ponds and most rivers are not covered.',
                 version: packageVersion,
             },
             servers: [],

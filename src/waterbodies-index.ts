@@ -14,9 +14,28 @@ export type BBoxItem = {
 };
 
 export type DatasetManifest = {
-    sourcePackage: string;
-    sourceVersion: string;
-    sourceSha256: string;
+    source: string;
+    sourceDataset: string;
+    sourceUrl?: string;
+    sourceLastModified?: string | null;
+    sourceEtag?: string | null;
+    sourceZipSha256?: string;
+    simplifyToleranceDeg?: string | null;
+    scope?: string;
+    sources?: Array<{
+        id: string;
+        source: string;
+        sourceDataset: string;
+        sourceUrl: string;
+        sourceLastModified?: string | null;
+        sourceEtag?: string | null;
+        sourceZipSha256?: string | null;
+        simplifyToleranceDeg?: string | null;
+        minAreaKm2?: string | null;
+        license?: string;
+        scope?: string;
+        citation?: string;
+    }>;
     fgbSha256: string;
     fgbGzSha256?: string;
     featureCount: number;

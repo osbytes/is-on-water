@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Is On Water</title>
-    <meta name="description" content="Check whether a geographic coordinate is on water (seas, lakes, and rivers). Self-hostable HTTP API.">
+    <meta name="description" content="Check whether a geographic coordinate is on water (oceans, seas, and large inland lakes). Self-hostable HTTP API.">
     <meta property="og:title" content="Is On Water">
-    <meta property="og:description" content="Check whether a geographic coordinate is on water (seas, lakes, and rivers) via a self-hostable HTTP API.">
+    <meta property="og:description" content="Check whether a geographic coordinate is on water (oceans, seas, and large inland lakes) via a self-hostable HTTP API.">
     <meta property="og:type" content="website">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💧</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -413,7 +413,7 @@
         <section class="hero">
             <p class="eyebrow">Open source · MIT</p>
             <h1>Is this point on water?</h1>
-            <p>Pass a latitude and longitude, get back whether it falls on water or land – seas, lakes, and rivers, worldwide. Approximate; not survey-grade.</p>
+            <p>Pass a latitude and longitude, get back whether it falls on water – oceans, seas, and inland lakes/reservoirs about 2 km² and larger. Approximate; not survey-grade.</p>
         </section>
 
         <div class="grid">
@@ -475,7 +475,7 @@
                         </li>
                         <li>
                             <span class="label">Data source</span>
-                            <span>OpenStreetMap waterbodies via <a href="https://github.com/simonepri/geo-maps" target="_blank" rel="noopener noreferrer">geo-maps</a> (~2017)</span>
+                            <span>OSM oceans/seas + <a href="https://www.hydrosheds.org/products/hydrolakes" target="_blank" rel="noopener noreferrer">HydroLAKES</a> (≥&nbsp;2&nbsp;km²)</span>
                         </li>
                         <li>
                             <span class="label">Accuracy</span>
@@ -504,7 +504,7 @@
     </main>
 
     <footer class="site-footer">
-        Water data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors via <a href="https://github.com/simonepri/geo-maps" target="_blank" rel="noopener noreferrer">geo-maps</a> (ODbL). Approximate; not survey-grade.
+        Water data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors (<a href="https://osmdata.openstreetmap.de/" target="_blank" rel="noopener noreferrer">osmdata</a>, ODbL) and <a href="https://www.hydrosheds.org/products/hydrolakes" target="_blank" rel="noopener noreferrer">HydroLAKES</a> (CC-BY 4.0). Approximate shoreline; lakes under ~2&nbsp;km² and most rivers not covered.
     </footer>
 
     <script>

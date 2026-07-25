@@ -29,7 +29,6 @@
     "@babel/preset-env": "^7.29.6",
     "@babel/preset-typescript": "^7.28.5",
     "@changesets/cli": "^2.31.1",
-    "@geo-maps/earth-waterbodies-1m": "^0.6.0",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.15.30",
     "@types/rbush": "^4.0.0",

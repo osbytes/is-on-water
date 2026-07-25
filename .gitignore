@@ -4,3 +4,11 @@ node_modules
 data/_waterbodies.exploded.geojson
 data/_waterbodies.fc.geojson
 data/waterbodies.fgb
+data/_osm/
+data/_hydrolakes/
+data/_oceans.tmp.fgb
+data/_lakes.tmp.fgb
+data/waterbodies-osm.fgb.gz
+data/manifest-osm.json
+
+data/waterbodies-geomaps.fgb.gz

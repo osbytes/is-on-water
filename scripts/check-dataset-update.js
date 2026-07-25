@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 /**
- * Check npm for a newer @geo-maps/earth-waterbodies-1m.
- * If updated, rebuild the FlatGeobuf dataset and exit 0 with updated=true.
- * If unchanged, exit 0 with updated=false.
+ * Check upstream OSM water-polygons for updates (HydroLAKES v1.0 is static).
+ * If updated, rebuild FlatGeobuf and exit 0 with updated=true.
  */
 const { spawnSync } = require('node:child_process');
-const { existsSync, readFileSync, writeFileSync, mkdirSync } = require('node:fs');
+const { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } =
+    require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
 const MANIFEST_PATH = path.join(DATA_DIR, 'manifest.json');
-const SOURCE_PACKAGE = '@geo-maps/earth-waterbodies-1m';
+const OSM_URL =
+    process.env.OSM_WATER_URL ||
+    'https://osmdata.openstreetmap.de/download/water-polygons-split-4326.zip';
 const GITHUB_OUTPUT = process.env.GITHUB_OUTPUT;
 
 function setOutput(name, value) {
@@ -21,49 +23,37 @@ function setOutput(name, value) {
 }
 
 function loadManifest() {
-    if (!existsSync(MANIFEST_PATH)) {
-        return null;
-    }
+    if (!existsSync(MANIFEST_PATH)) return null;
     return JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 }
 
-function fetchLatestVersion() {
-    const result = spawnSync(
-        'npm',
-        ['view', SOURCE_PACKAGE, 'version', '--json'],
-        { encoding: 'utf8', shell: process.platform === 'win32' }
-    );
+function headSourceMeta(url) {
+    const bin = process.platform === 'win32' ? 'curl.exe' : 'curl';
+    const result = spawnSync(bin, ['-sI', url], { encoding: 'utf8' });
     if (result.status !== 0) {
-        throw new Error(
-            `npm view failed: ${result.stderr || result.stdout || result.status}`
-        );
+        throw new Error(`HEAD ${url} failed: ${result.stderr || result.status}`);
     }
-    return JSON.parse(result.stdout.trim());
-}
-
-function installSource(version) {
-    const result = spawnSync(
-        'pnpm',
-        ['add', '-D', `${SOURCE_PACKAGE}@${version}`],
-        { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' }
-    );
-    if (result.status !== 0) {
-        throw new Error(`Failed to install ${SOURCE_PACKAGE}@${version}`);
-    }
+    const headers = result.stdout || '';
+    const lm = /^last-modified:\s*(.+)$/im.exec(headers);
+    const et = /^etag:\s*(.+)$/im.exec(headers);
+    return {
+        lastModified: lm ? new Date(lm[1].trim()).toISOString() : null,
+        etag: et ? et[1].trim() : null,
+    };
 }
 
 function rebuild() {
+    const zipPath = path.join(
+        DATA_DIR,
+        '_osm',
+        'water-polygons-split-4326.zip'
+    );
+    if (existsSync(zipPath)) rmSync(zipPath);
+
     const result = spawnSync(
         'node',
         [path.join(__dirname, 'build-waterbodies-fgb.js')],
-        {
-            cwd: ROOT,
-            stdio: 'inherit',
-            env: {
-                ...process.env,
-                FGB_BUILDER: process.env.FGB_BUILDER || 'auto',
-            },
-        }
+        { cwd: ROOT, stdio: 'inherit', env: { ...process.env } }
     );
     if (result.status !== 0) {
         throw new Error('Dataset rebuild failed');
@@ -73,27 +63,49 @@ function rebuild() {
 function main() {
     mkdirSync(DATA_DIR, { recursive: true });
     const manifest = loadManifest();
-    const latestVersion = fetchLatestVersion();
-    console.log(`Latest npm version: ${latestVersion}`);
+    const remote = headSourceMeta(OSM_URL);
+    console.log(`Remote OSM Last-Modified: ${remote.lastModified}`);
+    console.log(`Remote OSM ETag: ${remote.etag}`);
+
+    const pinned =
+        manifest?.sources?.find((s) => s.id === 'osm-water-polygons') ||
+        manifest;
     console.log(
-        `Pinned manifest version: ${manifest ? manifest.sourceVersion : '(none)'}`
+        `Pinned OSM Last-Modified: ${
+            pinned ? pinned.sourceLastModified : '(none)'
+        }`
     );
 
-    if (manifest && manifest.sourceVersion === latestVersion) {
+    const sameEtag =
+        pinned &&
+        remote.etag &&
+        pinned.sourceEtag &&
+        pinned.sourceEtag === remote.etag;
+    const sameModified =
+        pinned &&
+        remote.lastModified &&
+        pinned.sourceLastModified === remote.lastModified;
+
+    if (manifest && (sameEtag || sameModified)) {
         console.log('Dataset is up to date.');
         setOutput('updated', 'false');
-        setOutput('source_version', latestVersion);
+        setOutput('source_version', remote.lastModified || remote.etag || '');
         return;
     }
 
-    console.log('Dataset update detected; rebuilding FlatGeobuf…');
-    installSource(latestVersion);
+    console.log('OSM water-polygons update detected; rebuilding…');
     rebuild();
 
     const next = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
     setOutput('updated', 'true');
-    setOutput('source_version', next.sourceVersion);
-    setOutput('previous_version', manifest ? manifest.sourceVersion : '');
+    setOutput(
+        'source_version',
+        next.sourceLastModified || next.sourceEtag || next.generatedAt
+    );
+    setOutput(
+        'previous_version',
+        pinned ? pinned.sourceLastModified || pinned.sourceEtag || '' : ''
+    );
     setOutput(
         'feature_count',
         String(next.polygonPartCount || next.featureCount)

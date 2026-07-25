@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-25T14:53:08.103Z",
+  "generatedAt": "2026-07-25T16:20:55.416Z",
   "builder": "docker-gdal",
   "defaultSelection": "oceans:medium,lakes:medium",
   "features": {
@@ -11,6 +11,14 @@
     "lakes": {
       "defaultPrecision": "medium",
       "description": "Inland lakes and reservoirs, from HydroLAKES v1.0"
+    },
+    "rivers": {
+      "defaultPrecision": "medium",
+      "description": "Riverbanks and canal areas from OpenStreetMap (Geofabrik extracts)"
+    },
+    "ponds": {
+      "defaultPrecision": "medium",
+      "description": "Small inland water bodies (ponds, lakes, reservoirs) from OpenStreetMap, capped to complement HydroLAKES"
     }
   },
   "sources": [
@@ -36,6 +44,48 @@
       "sourceZipSha256": "9ef63498569dd7ccd0b8d8852da026e009a75f42d293f00e483f3b9fcfe8e1f9",
       "license": "CC-BY-4.0",
       "citation": "Messager et al. (2016) Nature Communications 7:13603"
+    },
+    {
+      "id": "osm-geofabrik-inland-water",
+      "feature": "rivers,ponds",
+      "source": "OpenStreetMap via Geofabrik",
+      "sourceDataset": "continent-latest.osm.pbf",
+      "sourceUrl": "https://download.geofabrik.de/",
+      "license": "ODbL",
+      "regions": [
+        {
+          "region": "antarctica",
+          "sourceUrl": "https://download.geofabrik.de/antarctica-latest.osm.pbf",
+          "sourceLastModified": "2026-07-24T22:00:15.000Z",
+          "sourceEtag": "\"1f8ed7d-657627f57372b\"",
+          "sourcePbfSha256": "18432360e97fe1716e73159743bd97a3be6507add42c0217fdce65e3e7354e70",
+          "bytes": 33090941
+        },
+        {
+          "region": "central-america",
+          "sourceUrl": "https://download.geofabrik.de/central-america-latest.osm.pbf",
+          "sourceLastModified": "2026-07-24T22:01:07.000Z",
+          "sourceEtag": "\"2e9b5412-6576282777c3f\"",
+          "sourcePbfSha256": "30913e51568aaf925e6362ccdb4302099e2bb0891080c7b4ee4d56168ed06fb3",
+          "bytes": 781931538
+        },
+        {
+          "region": "australia-oceania",
+          "sourceUrl": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
+          "sourceLastModified": "2026-07-24T22:02:02.000Z",
+          "sourceEtag": "\"5c7b203d-6576285ba31d0\"",
+          "sourcePbfSha256": "267dc49dc2445a631cc5143a1269584a40990914311600e840ae7e412a89a715",
+          "bytes": 1551573053
+        },
+        {
+          "region": "south-america",
+          "sourceUrl": "https://download.geofabrik.de/south-america-latest.osm.pbf",
+          "sourceLastModified": "2026-07-24T23:02:54.000Z",
+          "sourceEtag": "\"f301b7af-657635f6f9838\"",
+          "sourcePbfSha256": "a6656389aa07090d43c155e5d498e05a7d56277e0d1c86da89353663f12b46e5",
+          "bytes": 4076976047
+        }
+      ]
     }
   ],
   "artifacts": [
@@ -71,6 +121,40 @@
       "license": "ODbL",
       "attribution": "© OpenStreetMap contributors",
       "scope": "Oceans and seas; ~333 m shoreline detail"
+    },
+    {
+      "feature": "ponds",
+      "precision": "medium",
+      "delivery": "bundled",
+      "file": "layers/ponds-medium.fgb.gz",
+      "sha256": "3bdc83ffb9d1c302d5a39a7327ec9ddb66568349703b21a5c889bfbb9bb19558",
+      "bytes": 73285608,
+      "gzipBytes": 30188910,
+      "featureCount": 324884,
+      "simplifyToleranceDeg": "0.003",
+      "minAreaKm2": "0.01",
+      "maxAreaKm2": "2",
+      "source": "OpenStreetMap via Geofabrik",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors (via Geofabrik)",
+      "scope": "OSM ponds/lakes/reservoirs 0.01–2 km² (regions: antarctica, central-america, australia-oceania, south-america; complements HydroLAKES); ~333 m shoreline detail"
+    },
+    {
+      "feature": "rivers",
+      "precision": "medium",
+      "delivery": "bundled",
+      "file": "layers/rivers-medium.fgb.gz",
+      "sha256": "900f0a59c3cb08063116fdcbbf10b52d8a2cdb6fc7f2abde48f6b038b0339114",
+      "bytes": 31932384,
+      "gzipBytes": 20448110,
+      "featureCount": 58042,
+      "simplifyToleranceDeg": "0.003",
+      "minAreaKm2": null,
+      "maxAreaKm2": null,
+      "source": "OpenStreetMap via Geofabrik",
+      "license": "ODbL",
+      "attribution": "© OpenStreetMap contributors (via Geofabrik)",
+      "scope": "OSM riverbank / river / canal area geometries (regions: antarctica, central-america, australia-oceania, south-america); ~333 m shoreline detail"
     }
   ]
 }

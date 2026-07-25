@@ -33,6 +33,7 @@ export type LayerArtifact = {
     featureCount?: number;
     simplifyToleranceDeg?: string | null;
     minAreaKm2?: string | null;
+    maxAreaKm2?: string | null;
     source: string;
     license: string;
     attribution?: string;

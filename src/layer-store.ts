@@ -94,26 +94,54 @@ export const acquireArtifact = async (
         return { source: bytes, residentBytes: bytes.byteLength };
     }
 
-    if (!artifact.url) {
-        throw new Error(`Artifact ${label} is download-delivered but has no url`);
-    }
+    if (artifact.delivery === 'download') {
+        if (!artifact.url) {
+            throw new Error(
+                `Artifact ${label} is download-delivered but has no url`
+            );
+        }
 
-    const cached = cacheFileFor(artifact, cacheDir);
-    if (existsSync(cached)) {
-        if (artifact.sha256) {
-            // A corrupt or stale cache entry should be replaced, not fatal.
-            try {
-                verifyChecksum(cached, artifact.sha256, label);
-            } catch {
-                await rm(cached, { force: true });
+        // Prefer a locally-built copy when present (dev / CI before a release
+        // asset is published). The registry URL remains the production source.
+        const localGuess = path.join(
+            dataDir,
+            'layers',
+            `${artifact.feature}-${artifact.precision}.fgb.gz`
+        );
+        if (existsSync(localGuess)) {
+            if (artifact.sha256) {
+                try {
+                    verifyChecksum(localGuess, artifact.sha256, label);
+                    const bytes = readFgbBytes(localGuess);
+                    return { source: bytes, residentBytes: bytes.byteLength };
+                } catch {
+                    // Fall through to network download if the local file is stale.
+                }
+            } else {
+                const bytes = readFgbBytes(localGuess);
+                return { source: bytes, residentBytes: bytes.byteLength };
             }
         }
+
+        const cached = cacheFileFor(artifact, cacheDir);
+        if (existsSync(cached)) {
+            if (artifact.sha256) {
+                // A corrupt or stale cache entry should be replaced, not fatal.
+                try {
+                    verifyChecksum(cached, artifact.sha256, label);
+                } catch {
+                    await rm(cached, { force: true });
+                }
+            }
+        }
+
+        if (!existsSync(cached)) {
+            await downloadArtifact(artifact, cached, label, options.signal);
+        }
+
+        const bytes = readFgbBytes(cached);
+        return { source: bytes, residentBytes: bytes.byteLength };
     }
 
-    if (!existsSync(cached)) {
-        await downloadArtifact(artifact, cached, label, options.signal);
-    }
-
-    const bytes = readFgbBytes(cached);
-    return { source: bytes, residentBytes: bytes.byteLength };
+    throw new Error(`Unknown delivery mode for ${label}: ${artifact.delivery}`);
 };

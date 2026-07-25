@@ -1,5 +1,5 @@
 {
-  "description": "Ground-truth lat/lng samples used to validate waterbody datasets. critical=true fixtures must not change classification across dataset refreshes. Dataset covers oceans/seas (OSM coastline) plus inland lakes/reservoirs ≥ 2 km² (HydroLAKES).",
+  "description": "Ground-truth lat/lng samples used to validate waterbody datasets. critical=true fixtures must not change classification across dataset refreshes. Default coverage is oceans/seas (OSM coastline) plus inland lakes/reservoirs ≥ 2 km² (HydroLAKES). Opt-in rivers/ponds layers add OSM riverbank and small-water polygons.",
   "fixtures": [
     {
       "id": "mid-atlantic",

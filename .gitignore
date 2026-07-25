@@ -2,9 +2,11 @@ dist
 node_modules
 .tap
 
-# Cached upstream sources (hundreds of MB each)
+# Cached upstream sources (hundreds of MB–tens of GB each)
 data/_osm/
 data/_hydrolakes/
+data/_osm_inland/
+data/_geofabrik/
 
 # Intermediate GDAL output and downloaded (non-bundled) layers
 data/_*.tmp.fgb

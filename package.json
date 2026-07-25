@@ -19,6 +19,7 @@
     "test": "tap --reporter=base --allow-incomplete-coverage",
     "test:help": "tap --help",
     "dataset:build": "node scripts/build-waterbodies-fgb.js",
+    "dataset:build:inland": "node scripts/build-osm-inland-layers.js",
     "dataset:check": "node scripts/check-dataset-update.js",
     "changeset": "changeset",
     "changeset:version": "changeset version",

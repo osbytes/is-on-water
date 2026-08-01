@@ -1,6 +1,6 @@
 {
   "name": "is-on-water",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "main": "dist/index.js",
   "license": "MIT",

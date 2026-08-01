@@ -1,5 +1,11 @@
 # is-on-water
 
+## 1.4.1
+
+### Patch Changes
+
+- bb13faa: Upgrade `@fastify/swagger-ui` and pin patched `find-my-way`, `@fastify/static`, and `brace-expansion` to clear Dependabot advisories.
+
 ## 1.4.0
 
 ### Minor Changes

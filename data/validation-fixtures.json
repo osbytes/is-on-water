@@ -1,5 +1,5 @@
 {
-  "description": "Ground-truth lat/lng samples used to validate waterbody datasets. critical=true fixtures must not change classification across dataset refreshes.",
+  "description": "Ground-truth lat/lng samples used to validate waterbody datasets. critical=true fixtures must not change classification across dataset refreshes. Default coverage is oceans/seas (OSM coastline) plus inland lakes/reservoirs ≥ 2 km² (HydroLAKES). Opt-in rivers/ponds layers add OSM riverbank and small-water polygons.",
   "fixtures": [
     {
       "id": "mid-atlantic",
@@ -54,16 +54,16 @@
       "lat": 47.7,
       "lon": -87.5,
       "water": true,
-      "critical": false,
-      "note": "Large inland lake; soft fixture near shoreline complexity"
+      "critical": true,
+      "note": "Lake Superior (HydroLAKES)"
     },
     {
       "id": "caspian-sea",
       "lat": 41.5,
       "lon": 51.0,
       "water": true,
-      "critical": false,
-      "note": "Caspian Sea interior"
+      "critical": true,
+      "note": "Caspian Sea (HydroLAKES)"
     },
     {
       "id": "amazon-basin-land",

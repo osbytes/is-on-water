@@ -8,9 +8,22 @@ import gracefulShutdown from 'http-graceful-shutdown';
 const main = async () => {
     const config = await initConfig();
     const logger = await initLogging(config);
-    logger.info('Loading waterbodies FlatGeobuf…');
-    await initWaterLookup();
-    logger.info('Waterbodies index ready');
+    logger.info('Loading water layers…');
+    await initWaterLookup({
+        layers: config.waterLayers,
+        registryPath: config.layerRegistryPath,
+        cacheDir: config.layerCacheDir,
+        onLayerLoaded: (layer) =>
+            logger.info(
+                {
+                    layer: layer.id,
+                    delivery: layer.delivery,
+                    residentBytes: layer.residentBytes,
+                },
+                `Loaded water layer ${layer.id}`
+            ),
+    });
+    logger.info('Water layers ready');
     const app = await initApp(config, logger);
 
     await app.fastify.listen({

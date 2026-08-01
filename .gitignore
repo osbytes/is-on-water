@@ -1,6 +1,17 @@
 dist
 node_modules
 .tap
-data/_waterbodies.exploded.geojson
-data/_waterbodies.fc.geojson
-data/waterbodies.fgb
+
+# Cached upstream sources (hundreds of MB–tens of GB each)
+data/_osm/
+data/_hydrolakes/
+data/_osm_inland/
+data/_geofabrik/
+
+# Intermediate GDAL output and downloaded (non-bundled) layers
+data/_*.tmp.fgb
+data/_layer-cache/
+data/layers/*.fgb
+# Global rivers/ponds exceed git limits; served from the data-v1 release
+data/layers/rivers-*.fgb.gz
+data/layers/ponds-*.fgb.gz

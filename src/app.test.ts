@@ -57,8 +57,16 @@ tap.test('app', async (t) => {
         });
 
         t.equal(response.statusCode, 200);
-        const body = await response.body.json();
-        t.same(body, { lat, lon, water: true });
+        const body = (await response.body.json()) as {
+            water: boolean;
+            lat: number;
+            lon: number;
+            layer: string | null;
+        };
+        t.equal(body.water, true);
+        t.equal(body.lat, lat);
+        t.equal(body.lon, lon);
+        t.equal(body.layer, 'oceans:medium', 'open ocean should match oceans');
     });
 
     t.test('should indicate no water for Nebraska point', async (t) => {
@@ -72,7 +80,50 @@ tap.test('app', async (t) => {
 
         t.equal(response.statusCode, 200);
         const body = await response.body.json();
-        t.same(body, { lat, lon, water: false });
+        t.same(body, { lat, lon, water: false, layer: null });
+    });
+
+    t.test('should report a Great Lake as inland lake water', async (t) => {
+        const response = await client.request({
+            method: 'GET',
+            path: '/api/water?lat=47.7&lon=-87.5',
+        });
+
+        t.equal(response.statusCode, 200);
+        const body = (await response.body.json()) as {
+            water: boolean;
+            layer: string | null;
+        };
+        t.equal(body.water, true);
+        t.equal(body.layer, 'lakes:medium', 'Lake Superior comes from lakes');
+    });
+
+    t.test('should report enabled layers', async (t) => {
+        const response = await client.request({
+            method: 'GET',
+            path: '/api/layers',
+        });
+
+        t.equal(response.statusCode, 200);
+        const body = (await response.body.json()) as {
+            layers: Array<{
+                id: string;
+                feature: string;
+                precision: string;
+                delivery: string;
+                license: string;
+            }>;
+        };
+        t.equal(body.layers.length, 2, 'default selection enables two layers');
+        t.same(
+            body.layers.map((l) => l.id),
+            ['oceans:medium', 'lakes:medium'],
+            'oceans are checked before lakes'
+        );
+        for (const layer of body.layers) {
+            t.equal(layer.delivery, 'bundled');
+            t.ok(layer.license.length > 0, 'every layer declares a license');
+        }
     });
 
     t.test('should accept wrapped batch body on POST', async (t) => {
@@ -152,10 +203,12 @@ tap.test('app', async (t) => {
         t.match(body, /Is On Water/);
         t.match(body, /coord-form/);
         t.match(body, /\/api\/water/);
+        t.match(body, /\/api\/nearest/);
+        t.match(body, /Find nearest water/);
         t.match(body, /osbytes\.io\/badge/);
         t.match(body, /github\.com\/osbytes\/is-on-water/);
         t.match(body, /OpenStreetMap/);
-        t.match(body, /geo-maps/);
+        t.match(body, /HydroLAKES/);
 
         const cached = await client.request({
             method: 'GET',
@@ -186,5 +239,28 @@ tap.test('app', async (t) => {
         t.equal(body.info.title, 'is-on-water');
         t.equal(body.info.version, version);
         t.ok(body.paths['/api/water']);
+        t.ok(body.paths['/api/layers']);
+        t.ok(body.paths['/api/nearest']);
+    });
+
+    t.test('nearest returns ranked lakes near Superior shore', async (t) => {
+        const response = await client.request({
+            method: 'GET',
+            path: '/api/nearest?lat=46.5&lon=-87.5&count=2&type=lakes&maxKm=150',
+        });
+        t.equal(response.statusCode, 200);
+        const body = (await response.body.json()) as {
+            water: boolean;
+            nearest: Array<{
+                distanceKm: number;
+                areaKm2: number;
+                type: string;
+                layer: string;
+            }>;
+        };
+        t.equal(body.water, false);
+        t.equal(body.nearest.length, 2);
+        t.equal(body.nearest[0].type, 'lakes');
+        t.ok(body.nearest[0].distanceKm <= body.nearest[1].distanceKm);
     });
 });

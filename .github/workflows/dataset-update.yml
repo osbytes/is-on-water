@@ -17,7 +17,7 @@ concurrency:
 jobs:
   check-and-pr:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -36,10 +36,10 @@ jobs:
       - name: Check for dataset updates and rebuild
         id: dataset
         env:
-          # Prefer GDAL-backed FlatGeobuf (spatial index) in CI.
-          FGB_BUILDER: gdal
+          BUILD_LAYERS: 'oceans:medium,lakes:medium'
+          BUNDLED_LAYERS: 'oceans:medium,lakes:medium'
         run: |
-          docker pull ghcr.io/osgeo/gdal:alpine-small-latest
+          docker pull ghcr.io/osgeo/gdal:alpine-normal-latest
           node scripts/check-dataset-update.js
 
       - name: Validate rebuilt dataset
@@ -55,25 +55,25 @@ jobs:
         with:
           branch: chore/dataset-update
           delete-branch: true
-          title: 'chore: update waterbodies dataset to ${{ steps.dataset.outputs.source_version }}'
+          title: 'chore: update waterbodies dataset (${{ steps.dataset.outputs.source_version }})'
           commit-message: |
-            chore: update waterbodies FlatGeobuf to ${{ steps.dataset.outputs.source_version }}
+            chore: update bundled water layers (${{ steps.dataset.outputs.source_version }})
 
-            Rebuilt from ${{ steps.dataset.outputs.source_version }} (${{ steps.dataset.outputs.feature_count }} features).
+            Rebuilt from osmdata water-polygons (${{ steps.dataset.outputs.feature_count }} features).
           body: |
             ## Summary
-            - Detected an updated `@geo-maps/earth-waterbodies-1m` package (or source content hash change)
-            - Rebuilt `data/waterbodies.fgb.gz` and `data/manifest.json`
-            - Previous version: `${{ steps.dataset.outputs.previous_version }}`
-            - New version: `${{ steps.dataset.outputs.source_version }}`
-            - Feature count: `${{ steps.dataset.outputs.feature_count }}`
+            - Detected an updated `water-polygons-split-4326` zip on osmdata.openstreetmap.de
+            - Rebuilt the bundled layers in `data/layers/` and refreshed `data/layers.json`
+            - Previous: `${{ steps.dataset.outputs.previous_version }}`
+            - New: `${{ steps.dataset.outputs.source_version }}`
+            - Bundled feature count: `${{ steps.dataset.outputs.feature_count }}`
 
             ## Test plan
             - [x] `pnpm test` (includes dataset validation fixtures)
             - [x] `pnpm build`
             - [ ] Spot-check critical fixtures on the demo map after merge
 
-            Automated monthly dataset refresh.
+            Automated monthly dataset refresh (OSM oceans/seas + HydroLAKES inland).
           labels: |
             dataset
             automated

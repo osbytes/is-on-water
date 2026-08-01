@@ -15,3 +15,7 @@ data/layers/*.fgb
 # Global rivers/ponds exceed git limits; served from the data-v1 release
 data/layers/rivers-*.fgb.gz
 data/layers/ponds-*.fgb.gz
+
+.env
+.env.*
+!.env.example

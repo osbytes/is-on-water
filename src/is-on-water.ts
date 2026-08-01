@@ -7,7 +7,14 @@ import {
     type LayerRegistry,
     type LayerSelection,
 } from './layers';
+import {
+    findNearestWater,
+    type NearestWaterOptions,
+    type NearestWaterResult,
+} from './nearest-water';
 import { loadRegistry, pointInFgb, type FgbSource } from './waterbodies-index';
+
+export type { NearestWaterHit, NearestWaterResult } from './nearest-water';
 
 export type Coordinate = {
     lat: number;
@@ -145,3 +152,11 @@ export const isOnWater = async ({
     }
     return { water: false, lat, lon, layer: null };
 };
+
+/**
+ * Find nearest water bodies to a coordinate across enabled layers.
+ * See `findNearestWater` for count / type / maxKm options.
+ */
+export const nearestWater = async (
+    options: NearestWaterOptions
+): Promise<NearestWaterResult> => findNearestWater(requireLayers(), options);

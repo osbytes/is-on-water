@@ -203,6 +203,8 @@ tap.test('app', async (t) => {
         t.match(body, /Is On Water/);
         t.match(body, /coord-form/);
         t.match(body, /\/api\/water/);
+        t.match(body, /\/api\/nearest/);
+        t.match(body, /Find nearest water/);
         t.match(body, /osbytes\.io\/badge/);
         t.match(body, /github\.com\/osbytes\/is-on-water/);
         t.match(body, /OpenStreetMap/);
@@ -238,5 +240,27 @@ tap.test('app', async (t) => {
         t.equal(body.info.version, version);
         t.ok(body.paths['/api/water']);
         t.ok(body.paths['/api/layers']);
+        t.ok(body.paths['/api/nearest']);
+    });
+
+    t.test('nearest returns ranked lakes near Superior shore', async (t) => {
+        const response = await client.request({
+            method: 'GET',
+            path: '/api/nearest?lat=46.5&lon=-87.5&count=2&type=lakes&maxKm=150',
+        });
+        t.equal(response.statusCode, 200);
+        const body = (await response.body.json()) as {
+            water: boolean;
+            nearest: Array<{
+                distanceKm: number;
+                areaKm2: number;
+                type: string;
+                layer: string;
+            }>;
+        };
+        t.equal(body.water, false);
+        t.equal(body.nearest.length, 2);
+        t.equal(body.nearest[0].type, 'lakes');
+        t.ok(body.nearest[0].distanceKm <= body.nearest[1].distanceKm);
     });
 });

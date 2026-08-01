@@ -162,6 +162,16 @@ GEOFABRIK_REGIONS=europe,africa pnpm dataset:build:inland   # partial rebuild
 
 `BUILD_LAYERS` chooses what to build and `BUNDLED_LAYERS` chooses which of those are committed rather than published as release assets. The inland builder caches Geofabrik continent PBFs under `data/_osm_inland/` (tens of GB) and merges them; set `GEOFABRIK_REGIONS` to limit which continents are included. Artifacts built by earlier runs are preserved in the registry, so building one precision does not drop the others.
 
+### Nearest water
+
+`GET /api/nearest?lat=&lon=` returns nearby water polygons from the enabled layers as a `nearest` array ordered by ascending distance, then descending area. Each hit is the **nearest shoreline point** on that body (not necessarily a coordinate that `/api/water` would mark `water: true`, since ring boundaries are outside the polygon fill).
+
+| Param   | Default | Description |
+| ------- | ------- | ----------- |
+| `count` | `5`     | Max hits to return (1–25) |
+| `type`  | all enabled | Comma-separated features: `oceans`, `lakes`, `rivers`, `ponds` |
+| `maxKm` | `100`   | Search radius cap (0.1–500) |
+
 A monthly GitHub Action checks the OSM zip’s `Last-Modified` / ETag, rebuilds `data/`, runs the dataset validation suite, and opens a PR when something changed.
 
 © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL). HydroLAKES © HydroSHEDS / Messager et al. (CC-BY 4.0).

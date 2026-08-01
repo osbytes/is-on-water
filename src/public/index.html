@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <style>
         :root {
             --bg: #ffffff;
@@ -172,6 +173,89 @@
             gap: 0.75rem;
         }
 
+        .map-wrap {
+            position: relative;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--surface);
+        }
+
+        #map {
+            height: 18rem;
+            width: 100%;
+            cursor: crosshair;
+            background: #e8eef2;
+        }
+
+        .map-hint {
+            position: absolute;
+            left: 0.65rem;
+            bottom: 0.65rem;
+            z-index: 500;
+            margin: 0;
+            padding: 0.3rem 0.55rem;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid var(--border);
+            font-size: 0.68rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--muted);
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .map-hint.is-dimmed {
+            opacity: 0;
+        }
+
+        .leaflet-control.nearest-control {
+            margin: 0 0 0.75rem 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .nearest-btn {
+            display: block;
+            width: auto;
+            min-width: 11rem;
+            padding: 0.55rem 0.9rem;
+            border: none;
+            border-radius: 6px;
+            background: #111;
+            color: #fff;
+            font: inherit;
+            font-weight: 600;
+            font-size: 0.8rem;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+        }
+
+        .nearest-btn[hidden] { display: none !important; }
+        .nearest-btn:hover { background: #2a2a2a; }
+        .nearest-btn:disabled {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
+        .pin {
+            width: 14px;
+            height: 14px;
+            margin-left: -7px;
+            margin-top: -7px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+            background: var(--land);
+        }
+
+        .pin.water { background: var(--water); }
+        .pin.pending { background: #999; }
+
         .coords {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -220,6 +304,11 @@
         .check-btn:disabled {
             opacity: 0.6;
             cursor: wait;
+        }
+
+        .pin.shore {
+            background: var(--water);
+            box-shadow: 0 0 0 2px rgba(26, 95, 138, 0.25), 0 1px 4px rgba(0, 0, 0, 0.35);
         }
 
         .response-box {
@@ -413,15 +502,23 @@
         <section class="hero">
             <p class="eyebrow">Open source · MIT</p>
             <h1>Is this point on water?</h1>
-                    <p>Pass a latitude and longitude, get back whether it falls on water – oceans, seas, and inland lakes/reservoirs about 2 km² and larger on this instance. Coverage is configurable when self-hosting; approximate, not survey-grade.</p>
+            <p>Click the map or enter coordinates to check. If it is not water, you can find the nearest shorelines with <span class="mono">GET /api/nearest</span>. This instance covers oceans, seas, and inland lakes/reservoirs about 2&nbsp;km² and larger. Coverage is configurable when self-hosting; approximate, not survey-grade.</p>
         </section>
 
         <div class="grid">
             <section class="try" aria-labelledby="try-heading">
                 <div class="section-head">
                     <h2 id="try-heading">Try it</h2>
-                    <span class="endpoint mono">GET /api/water?lat=&amp;lon=</span>
+                    <span class="endpoint mono">GET /api/water · /api/nearest</span>
                 </div>
+
+                <div class="map-wrap">
+                    <div id="map" role="application" aria-label="Map: click to pick a coordinate"></div>
+                    <p class="map-hint" id="map-hint">Click map to check</p>
+                </div>
+                <button class="nearest-btn" id="nearest-btn" type="button" hidden>
+                    Find nearest water
+                </button>
 
                 <form class="coords" id="coord-form">
                     <label>lat
@@ -471,7 +568,11 @@
                     <ul class="details-list">
                         <li>
                             <span class="label">Endpoints</span>
-                            <span>GET single · POST batch</span>
+                            <span>GET single · POST batch · GET nearest</span>
+                        </li>
+                        <li>
+                            <span class="label">Nearest</span>
+                            <span><span class="mono">GET /api/nearest</span> — shoreline hits ranked by distance, then size</span>
                         </li>
                         <li>
                             <span class="label">Data source</span>
@@ -511,6 +612,7 @@
         Water data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors (<a href="https://osmdata.openstreetmap.de/" target="_blank" rel="noopener noreferrer">osmdata</a>, ODbL) and <a href="https://www.hydrosheds.org/products/hydrolakes" target="_blank" rel="noopener noreferrer">HydroLAKES</a> (CC-BY 4.0). Approximate shoreline; lakes under ~2&nbsp;km² and most rivers not covered.
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
         const EXAMPLES = [
             { name: 'Atlantic Ocean', lat: 20.112682, lon: -37.048647, water: true },
@@ -523,6 +625,8 @@
         const lonInput = document.getElementById('lon-input');
         const coordForm = document.getElementById('coord-form');
         const checkBtn = document.getElementById('check-btn');
+        const nearestBtn = document.getElementById('nearest-btn');
+        const mapHint = document.getElementById('map-hint');
         const statusPill = document.getElementById('status-pill');
         const httpStatus = document.getElementById('http-status');
         const responseBody = document.getElementById('response-body');
@@ -533,19 +637,120 @@
 
         let ab = new AbortController();
         let activeExample = 'Swiss Alps';
+        let marker = null;
+        let pinState = 'pending';
+        let lastQuery = { lat: 46.82, lon: 8.22 };
 
-        const formatCoord = (n) => String(n);
+        const formatCoord = (n) =>
+            Number.isFinite(n) ? Number(n.toFixed(6)).toString() : String(n);
 
         const apiPath = (lat, lon) =>
             `/api/water?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
 
+        const nearestPath = (lat, lon) =>
+            `/api/nearest?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&count=5&maxKm=150`;
+
         const apiUrl = (lat, lon) => `${window.location.origin}${apiPath(lat, lon)}`;
+
+        const pinIcon = (state) =>
+            L.divIcon({
+                className: '',
+                html: `<div class="pin ${state}"></div>`,
+                iconSize: [14, 14],
+                iconAnchor: [7, 7],
+            });
+
+        const map = L.map('map', {
+            worldCopyJump: true,
+            scrollWheelZoom: true,
+        }).setView([20, 0], 2);
+
+        L.tileLayer(
+            'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+            {
+                attribution:
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 18,
+            }
+        ).addTo(map);
+
+        const NearestControl = L.Control.extend({
+            onAdd() {
+                const wrap = L.DomUtil.create('div', 'nearest-control');
+                wrap.appendChild(nearestBtn);
+                L.DomEvent.disableClickPropagation(wrap);
+                L.DomEvent.disableScrollPropagation(wrap);
+                return wrap;
+            },
+        });
+        new NearestControl({ position: 'bottomleft' }).addTo(map);
+
+        const nearestLayer = L.layerGroup().addTo(map);
+
+        function clearNearest() {
+            nearestLayer.clearLayers();
+        }
+
+        function setNearestVisible(show) {
+            const on = Boolean(show);
+            nearestBtn.hidden = !on;
+            mapHint.classList.toggle('is-dimmed', on);
+        }
+
+        function setMarker(lat, lon, state = pinState) {
+            pinState = state;
+            const latLng = L.latLng(lat, lon);
+            if (marker) {
+                marker.setLatLng(latLng);
+                marker.setIcon(pinIcon(state));
+            } else {
+                marker = L.marker(latLng, {
+                    icon: pinIcon(state),
+                    keyboard: false,
+                }).addTo(map);
+            }
+        }
+
+        function focusMap(lat, lon, zoom) {
+            const z = zoom ?? Math.max(map.getZoom(), 4);
+            map.setView([lat, lon], z, { animate: true });
+        }
+
+        function plotNearest(origin, hits) {
+            clearNearest();
+            const bounds = L.latLngBounds([origin.lat, origin.lon]);
+            for (const hit of hits) {
+                const latLng = L.latLng(hit.lat, hit.lon);
+                bounds.extend(latLng);
+                L.marker(latLng, {
+                    icon: pinIcon('shore'),
+                    keyboard: false,
+                    title: `${hit.type} · ${hit.distanceKm} km`,
+                })
+                    .bindTooltip(
+                        `${hit.type} · ${hit.distanceKm} km`,
+                        { direction: 'top', offset: [0, -8] }
+                    )
+                    .addTo(nearestLayer);
+            }
+            if (hits.length > 0) {
+                map.fitBounds(bounds.pad(0.2), { animate: true, maxZoom: 10 });
+            }
+        }
 
         function updateUsageExample() {
             const sample = EXAMPLES[0];
-            curlExample.textContent = `curl "${apiUrl(sample.lat, sample.lon)}"`;
+            curlExample.textContent =
+                `curl "${apiUrl(sample.lat, sample.lon)}"\n` +
+                `curl "${window.location.origin}/api/nearest?lat=${sample.lat}&lon=${sample.lon}&count=3"`;
             curlResponse.textContent = JSON.stringify(
-                { water: sample.water, lat: sample.lat, lon: sample.lon },
+                {
+                    water: sample.water,
+                    lat: sample.lat,
+                    lon: sample.lon,
+                    layer: sample.water ? 'oceans:medium' : null,
+                },
                 null,
                 2
             );
@@ -568,12 +773,16 @@
             ).join('');
         }
 
-        function showResult({ water, lat, lon, status, error }) {
+        function showResult({ water, lat, lon, layer, status, error, nearest }) {
             if (error) {
                 statusPill.textContent = 'error';
                 statusPill.className = 'status-pill error';
                 httpStatus.textContent = status ? ` ${status}` : '';
                 responseBody.textContent = JSON.stringify({ error }, null, 2);
+                setNearestVisible(false);
+                if (Number.isFinite(lat) && Number.isFinite(lon)) {
+                    setMarker(lat, lon, 'pending');
+                }
                 return;
             }
 
@@ -581,20 +790,34 @@
             statusPill.textContent = label;
             statusPill.className = `status-pill ${label}`;
             httpStatus.textContent = status ? ` ${status}` : ' 200 OK';
-            // Show the API payload as returned (boolean water flag only).
-            responseBody.textContent = JSON.stringify({ water, lat, lon }, null, 2);
+            const body = { water, lat, lon };
+            if (layer !== undefined) body.layer = layer;
+            if (nearest) body.nearest = nearest;
+            responseBody.textContent = JSON.stringify(body, null, 2);
+            setMarker(lat, lon, label);
+            setNearestVisible(water === false && !nearest);
         }
 
-        async function lookup(lat, lon, exampleName) {
+        async function lookup(lat, lon, exampleName, { pan = true } = {}) {
             ab.abort();
             ab = new AbortController();
+            lastQuery = { lat, lon };
+            clearNearest();
 
             latInput.value = formatCoord(lat);
             lonInput.value = formatCoord(lon);
             if (exampleName) setActiveExample(exampleName);
             else setActiveExample('');
 
+            setMarker(lat, lon, 'pending');
+            setNearestVisible(false);
+            if (pan) {
+                const zoom = exampleName ? 4 : Math.max(map.getZoom(), 5);
+                focusMap(lat, lon, zoom);
+            }
+
             checkBtn.disabled = true;
+            nearestBtn.disabled = true;
             statusPill.textContent = '…';
             statusPill.className = 'status-pill';
             httpStatus.textContent = '';
@@ -611,7 +834,7 @@
                         if (errBody?.detail) detail = errBody.detail;
                         else if (errBody?.msg) detail = errBody.msg;
                     } catch (_) {}
-                    showResult({ status: statusText, error: detail });
+                    showResult({ lat, lon, status: statusText, error: detail });
                     return;
                 }
 
@@ -619,11 +842,71 @@
                 showResult({ ...data, status: statusText });
             } catch (e) {
                 if (e.name === 'AbortError') return;
-                showResult({ error: e.message || 'Request failed' });
+                showResult({
+                    lat,
+                    lon,
+                    error: e.message || 'Request failed',
+                });
             } finally {
+                checkBtn.disabled = false;
+                nearestBtn.disabled = false;
+            }
+        }
+
+        async function lookupNearest() {
+            const { lat, lon } = lastQuery;
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+            ab.abort();
+            ab = new AbortController();
+
+            nearestBtn.disabled = true;
+            checkBtn.disabled = true;
+            statusPill.textContent = '…';
+            statusPill.className = 'status-pill';
+            httpStatus.textContent = '';
+            responseBody.textContent = 'Finding nearest water…';
+
+            try {
+                const res = await fetch(nearestPath(lat, lon), {
+                    signal: ab.signal,
+                });
+                const statusText = `${res.status} ${res.statusText || 'OK'}`.trim();
+                if (!res.ok) {
+                    let detail = `Request failed (${res.status})`;
+                    try {
+                        const errBody = await res.json();
+                        if (errBody?.detail) detail = errBody.detail;
+                        else if (errBody?.msg) detail = errBody.msg;
+                    } catch (_) {}
+                    showResult({ lat, lon, status: statusText, error: detail });
+                    return;
+                }
+
+                const data = await res.json();
+                showResult({
+                    ...data,
+                    status: statusText,
+                    nearest: data.nearest,
+                });
+                plotNearest({ lat, lon }, data.nearest || []);
+                setNearestVisible(false);
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                showResult({
+                    lat,
+                    lon,
+                    error: e.message || 'Request failed',
+                });
+            } finally {
+                nearestBtn.disabled = false;
                 checkBtn.disabled = false;
             }
         }
+
+        map.on('click', (e) => {
+            lookup(e.latlng.lat, e.latlng.lng, null, { pan: false });
+        });
 
         coordForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -631,6 +914,10 @@
             const lon = Number(lonInput.value);
             if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
             lookup(lat, lon);
+        });
+
+        nearestBtn.addEventListener('click', () => {
+            lookupNearest();
         });
 
         examplesEl.addEventListener('click', (e) => {
@@ -652,7 +939,11 @@
 
         renderExamples();
         updateUsageExample();
-        lookup(46.82, 8.22, 'Swiss Alps');
+        // Leaflet needs a layout pass after the map container is visible.
+        requestAnimationFrame(() => {
+            map.invalidateSize();
+            lookup(46.82, 8.22, 'Swiss Alps');
+        });
     </script>
 </body>
 </html>

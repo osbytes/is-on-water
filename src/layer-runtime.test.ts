@@ -125,30 +125,32 @@ tap.test('layer runtime', async (t) => {
         });
     });
 
-    t.test('opting into ponds covers small inland water', async (t) => {
-        // ponds:medium is ~860 MB gzip / ~2.2 GB resident and is gitignored
-        // (release asset). CI cannot download+inflate it within the suite
-        // timeout; keep the assertion for local runs that have the file.
-        if (process.env.CI && !existsSync(localPondsArtifact)) {
-            t.skip(
-                'ponds:medium is too large to download/load in CI; run locally with data/layers/ponds-medium.fgb.gz'
+    t.test(
+        'opting into ponds covers small inland water',
+        {
+            skip:
+                process.env.CI && !existsSync(localPondsArtifact)
+                    ? 'ponds:medium is too large to download/load in CI; run locally with data/layers/ponds-medium.fgb.gz'
+                    : false,
+        },
+        async (t) => {
+            // ponds:medium is ~860 MB gzip / ~2.2 GB resident and is gitignored
+            // (release asset). CI cannot download+inflate it within the suite
+            // timeout; keep the assertion for local runs that have the file.
+            await withLayers('ponds');
+
+            t.same(
+                getLoadedLayers().map((l) => l.id),
+                ['ponds:medium']
             );
-            return;
+            // A HydroLAKES-scale lake must NOT appear in the ponds window (≤ 2 km²).
+            t.match(
+                await isOnWater(LAKE_SUPERIOR),
+                { water: false, layer: null },
+                'Lake Superior is above the ponds area ceiling'
+            );
         }
-
-        await withLayers('ponds');
-
-        t.same(
-            getLoadedLayers().map((l) => l.id),
-            ['ponds:medium']
-        );
-        // A HydroLAKES-scale lake must NOT appear in the ponds window (≤ 2 km²).
-        t.match(
-            await isOnWater(LAKE_SUPERIOR),
-            { water: false, layer: null },
-            'Lake Superior is above the ponds area ceiling'
-        );
-    });
+    );
 
     t.test('loaded layers carry attribution metadata', async (t) => {
         await withLayers(undefined);

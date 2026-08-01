@@ -1,5 +1,13 @@
 # is-on-water
 
+## 1.4.0
+
+### Minor Changes
+
+- f9b8655: Add `GET /api/nearest` to return nearby water bodies as a distance-then-size ranked array. Callers can limit results with `count`, filter by feature `type` (e.g. `lakes` or `oceans,lakes`), and bound the search with `maxKm`.
+- 5b1f0c3: Make coverage opt-in through `{feature}:{precision}` layers selected with `WATER_LAYERS`, and query the FlatGeobuf spatial index directly instead of rebuilding an RBush at startup (~1.05 GB resident to ~430 MB). Water responses now report the matching layer, and `GET /api/layers` reports which layers an instance has enabled. Adds opt-in global `rivers` and `ponds` layers built from Geofabrik OSM continent extracts (river/canal area polygons and small inland water ≤ 2 km²), published as `data-v1` release assets.
+- 1fbe1e7: Replace geo-maps with OSM oceans/seas plus HydroLAKES inland lakes (≥2 km²).
+
 ## 1.3.0
 
 ### Minor Changes

@@ -135,7 +135,7 @@ WATER_LAYERS=all                                     # every feature at its defa
 
 A bare feature name uses that feature's default precision, and a feature listed more than once collapses to the highest precision requested, so `oceans:low,oceans:full` resolves to `oceans:full`.
 
-`oceans:medium`, `lakes:medium`, `rivers:medium`, and `ponds:medium` ship in this repository. Higher-precision combinations are published as GitHub Release assets and downloaded once at boot into `WATER_LAYER_CACHE_DIR` (default `data/_layer-cache`), where they are verified against the checksum in the registry and reused across restarts.
+`oceans:medium` and `lakes:medium` ship in this repository. Global `rivers:medium` (~138 MB) and `ponds:medium` (~820 MB) are published as [GitHub Release assets](https://github.com/osbytes/is-on-water/releases/tag/data-v1) (`delivery: download`) and fetched once at boot into `WATER_LAYER_CACHE_DIR` (default `data/_layer-cache`), where they are verified against the checksum in the registry and reused across restarts. Higher-precision combinations use the same release channel.
 
 To host artifacts yourself, or to add features this project does not ship, point `WATER_LAYERS_REGISTRY` at your own registry file modelled on [`data/layers.json`](./data/layers.json). Each artifact declares how it is delivered:
 

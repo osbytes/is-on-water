@@ -27,12 +27,13 @@ const {
     writeFileSync,
     statSync,
     createWriteStream,
+    createReadStream,
 } = require('node:fs');
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
-const { gzipSync } = require('node:zlib');
+const { createGzip } = require('node:zlib');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -49,9 +50,9 @@ const RELEASE_BASE_URL =
     'https://github.com/osbytes/is-on-water/releases/download/data-v1';
 
 const DEFAULT_BUILD = 'rivers:medium,ponds:medium';
-// Each file has its own GitHub blob limit; medium inland layers are typically
-// small enough to commit even after a full-planet build.
-const DEFAULT_BUNDLED = 'rivers:medium,ponds:medium';
+// Global inland medium artifacts exceed GitHub's soft blob limit — publish as
+// release assets (`delivery: download`) unless BUNDLED_LAYERS overrides.
+const DEFAULT_BUNDLED = '';
 
 /**
  * Continent extracts cover the whole planet without country-level duplication.
@@ -115,7 +116,6 @@ function sha256Buffer(buf) {
 }
 
 function sha256File(filePath) {
-    const { createReadStream } = require('node:fs');
     return new Promise((resolve, reject) => {
         const hash = createHash('sha256');
         const stream = createReadStream(filePath);
@@ -123,6 +123,51 @@ function sha256File(filePath) {
         stream.on('error', reject);
         stream.on('end', () => resolve(hash.digest('hex')));
     });
+}
+
+async function gzipFile(srcPath, destPath) {
+    await pipeline(
+        createReadStream(srcPath),
+        createGzip({ level: 9 }),
+        createWriteStream(destPath)
+    );
+}
+
+function countFgbFeaturesViaOgr(fgbPath) {
+    const mount = `${toDockerMountPath(ROOT)}:/work`;
+    const result = spawnSync(
+        'docker',
+        [
+            'run',
+            '--rm',
+            '-v',
+            mount,
+            GDAL_IMAGE,
+            'ogrinfo',
+            '-so',
+            '-al',
+            toWorkPath(fgbPath),
+        ],
+        { encoding: 'utf8' }
+    );
+    if (result.status !== 0) {
+        throw new Error(
+            `ogrinfo failed for ${path.basename(fgbPath)}: ${result.stderr || result.status}`
+        );
+    }
+    const m = /Feature Count:\s*(\d+)/i.exec(result.stdout || '');
+    if (!m) {
+        throw new Error(
+            `Could not parse feature count for ${path.basename(fgbPath)}`
+        );
+    }
+    return Number(m[1]);
+}
+
+async function countFgbFeatures(fgbPath) {
+    // Always use ogrinfo — flatgeobuf's Node stream support is unreliable and
+    // can emit late errors after we delete the temp FGB.
+    return countFgbFeaturesViaOgr(fgbPath);
 }
 
 function humanBytes(n) {
@@ -176,24 +221,44 @@ function readCachedMeta(filePath) {
 function headMeta(url) {
     const bin = process.platform === 'win32' ? 'curl.exe' : 'curl';
     const result = spawnSync(bin, ['-sI', '-L', url], { encoding: 'utf8' });
-    if (result.status !== 0) return { lastModified: null, etag: null };
+    if (result.status !== 0) {
+        return { lastModified: null, etag: null, contentLength: null };
+    }
     const headers = result.stdout || '';
     const lm = /^last-modified:\s*(.+)$/im.exec(headers);
     const et = /^etag:\s*(.+)$/im.exec(headers);
+    // Last Content-Length wins after redirects.
+    let contentLength = null;
+    for (const m of headers.matchAll(/^content-length:\s*(\d+)\s*$/gim)) {
+        contentLength = Number(m[1]);
+    }
     return {
         lastModified: lm ? new Date(lm[1].trim()).toISOString() : null,
         etag: et ? et[1].trim() : null,
+        contentLength,
     };
 }
 
+function isCompleteDownload(destPath, expectedBytes) {
+    if (!existsSync(destPath)) return false;
+    const size = statSync(destPath).size;
+    if (size <= 1024) return false;
+    // Without a known total, only treat as complete if a prior run marked it.
+    if (!expectedBytes || expectedBytes <= 0) {
+        return Boolean(readCachedMeta(destPath)?.downloadedAt);
+    }
+    // Allow a tiny slack for servers that omit trailers inconsistently.
+    return size >= expectedBytes * 0.995;
+}
+
 async function downloadTo(url, destPath, label) {
-    if (existsSync(destPath) && statSync(destPath).size > 1024) {
+    const meta = headMeta(url);
+    const expected = meta.contentLength;
+    if (isCompleteDownload(destPath, expected)) {
         console.log(
             `Reusing cached ${label} (${humanBytes(statSync(destPath).size)}). Delete to re-download.`
         );
         if (!readCachedMeta(destPath)) {
-            // Files downloaded outside this script still need provenance.
-            const meta = headMeta(url);
             writeFileSync(
                 metaPathFor(destPath),
                 `${JSON.stringify(
@@ -201,6 +266,7 @@ async function downloadTo(url, destPath, label) {
                         url,
                         lastModified: meta.lastModified,
                         etag: meta.etag,
+                        contentLength: expected,
                         downloadedAt: null,
                         notedAt: new Date().toISOString(),
                     },
@@ -211,6 +277,14 @@ async function downloadTo(url, destPath, label) {
         }
         return;
     }
+    if (existsSync(destPath) && statSync(destPath).size > 1024) {
+        console.log(
+            `Incomplete ${label} (${humanBytes(statSync(destPath).size)}${
+                expected ? ` / ${humanBytes(expected)}` : ''
+            }); re-downloading…`
+        );
+        rmSync(destPath);
+    }
     mkdirSync(path.dirname(destPath), { recursive: true });
     console.log(`Downloading ${url} …`);
     const res = await fetch(url);
@@ -218,6 +292,8 @@ async function downloadTo(url, destPath, label) {
         throw new Error(`Download failed for ${label}: HTTP ${res.status}`);
     }
     const lastModifiedHeader = res.headers.get('last-modified');
+    const total =
+        Number(res.headers.get('content-length')) || expected || 0;
     writeFileSync(
         metaPathFor(destPath),
         `${JSON.stringify(
@@ -225,15 +301,15 @@ async function downloadTo(url, destPath, label) {
                 url,
                 lastModified: lastModifiedHeader
                     ? new Date(lastModifiedHeader).toISOString()
-                    : null,
-                etag: res.headers.get('etag'),
+                    : meta.lastModified,
+                etag: res.headers.get('etag') || meta.etag,
+                contentLength: total || null,
                 downloadedAt: new Date().toISOString(),
             },
             null,
             2
         )}\n`
     );
-    const total = Number(res.headers.get('content-length')) || 0;
     let received = 0;
     let lastLogged = 0;
     const body = Readable.fromWeb(res.body);
@@ -248,14 +324,25 @@ async function downloadTo(url, destPath, label) {
         }
     });
     await pipeline(body, createWriteStream(destPath));
-    console.log(`Saved ${destPath} (${humanBytes(statSync(destPath).size)})`);
+    const finalSize = statSync(destPath).size;
+    if (total > 0 && finalSize < total * 0.995) {
+        throw new Error(
+            `Download incomplete for ${label}: got ${humanBytes(finalSize)}, expected ${humanBytes(total)}`
+        );
+    }
+    console.log(`Saved ${destPath} (${humanBytes(finalSize)})`);
 }
 
 function toDockerMountPath(p) {
     if (process.platform !== 'win32') return p;
-    const m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
-    if (!m) return p.replace(/\\/g, '/');
-    return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, '/')}`;
+    // Docker Desktop accepts Windows paths. WSL-style /mnt/<drive> only works
+    // when the CLI talks to a Linux dockerd inside WSL — opt in via env.
+    if (process.env.DOCKER_MOUNT_STYLE === 'wsl') {
+        const m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
+        if (!m) return p.replace(/\\/g, '/');
+        return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, '/')}`;
+    }
+    return p.replace(/\\/g, '/');
 }
 
 function toWorkPath(hostPath) {
@@ -357,6 +444,45 @@ function regionWaterFgb(region) {
     return path.join(INLAND_DIR, `${region}-water.tmp.fgb`);
 }
 
+/**
+ * Optional: extract large continent PBFs on a WSL-native ext4 dir when the
+ * Docker engine is a remote Linux dockerd over slow 9p mounts.
+ * Disabled by default (Docker Desktop + fast host SSD is fine).
+ * Set OSM_NATIVE_WORK=/path to enable, or OSM_NATIVE_WORK=0 to force off.
+ */
+function nativeOsmWorkDir() {
+    if (process.env.OSM_NATIVE_WORK === '0') return null;
+    if (process.env.OSM_NATIVE_WORK) return process.env.OSM_NATIVE_WORK;
+    return null;
+}
+
+function extractRegionWaterViaNative(region) {
+    const script = toDockerMountPath(
+        path.join(__dirname, '_extract-native.sh')
+    );
+    const repo = toDockerMountPath(ROOT);
+    const native = nativeOsmWorkDir();
+    console.log(`Extracting ${region} via WSL native disk (${native})…`);
+    // Pass env inside the Linux shell — Windows env is not forwarded by wsl.exe.
+    const result = spawnSync(
+        'wsl',
+        [
+            '-d',
+            'Ubuntu',
+            '--',
+            'bash',
+            '-lc',
+            `REPO='${repo}' OSM_NATIVE_WORK='${native}' GDAL_IMAGE='${GDAL_IMAGE}' bash '${script}' '${region}'`,
+        ],
+        { stdio: 'inherit' }
+    );
+    if (result.status !== 0) {
+        throw new Error(
+            `native extract ${region} failed with status ${result.status}`
+        );
+    }
+}
+
 function extractRegionWater(region) {
     const pbf = regionPbfPath(region);
     const out = regionWaterFgb(region);
@@ -368,27 +494,45 @@ function extractRegionWater(region) {
     }
     if (existsSync(out)) rmSync(out);
     console.log(`Extracting inland water polygons from ${region}…`);
-    runOgr([
-        '-f',
-        'FlatGeobuf',
-        '-nlt',
-        'PROMOTE_TO_MULTI',
-        '-nln',
-        'water',
-        '-where',
-        WATER_EXTRACT_WHERE,
-        '-select',
-        'natural,landuse,waterway,water',
-        toWorkPath(out),
-        toWorkPath(pbf),
-        'multipolygons',
-    ]);
+    const useNative =
+        nativeOsmWorkDir() &&
+        existsSync(pbf) &&
+        statSync(pbf).size >= 2 * 1024 * 1024 * 1024;
+    if (useNative) {
+        extractRegionWaterViaNative(region);
+    } else {
+        runOgr([
+            '-f',
+            'FlatGeobuf',
+            '-nlt',
+            'PROMOTE_TO_MULTI',
+            '-nln',
+            'water',
+            '-where',
+            WATER_EXTRACT_WHERE,
+            '-select',
+            'natural,landuse,waterway,water',
+            toWorkPath(out),
+            toWorkPath(pbf),
+            'multipolygons',
+        ]);
+    }
     console.log(
         `  → ${path.basename(out)} (${humanBytes(statSync(out).size)})`
     );
 }
 
 function mergeRegionWater(regionFgbs, outputFgb) {
+    if (
+        existsSync(outputFgb) &&
+        statSync(outputFgb).size > 0 &&
+        process.env.FORCE_MERGE !== '1'
+    ) {
+        console.log(
+            `Reusing ${path.basename(outputFgb)} (${humanBytes(statSync(outputFgb).size)})`
+        );
+        return;
+    }
     if (existsSync(outputFgb)) rmSync(outputFgb);
     if (regionFgbs.length === 1) {
         // Single region: copy with a stable layer name for downstream SQL.
@@ -456,6 +600,16 @@ function mergeRegionWater(regionFgbs, outputFgb) {
 }
 
 function convertFeature({ feature, precision, params, sourceFgb, outputFgb }) {
+    if (
+        existsSync(outputFgb) &&
+        statSync(outputFgb).size > 0 &&
+        process.env.FORCE_CONVERT !== '1'
+    ) {
+        console.log(
+            `Reusing ${path.basename(outputFgb)} (${humanBytes(statSync(outputFgb).size)})`
+        );
+        return 'reused';
+    }
     if (existsSync(outputFgb)) rmSync(outputFgb);
     const definition = FEATURES[feature];
     const whereParts = [definition.where, ...areaSql(params)];
@@ -488,15 +642,6 @@ function convertFeature({ feature, precision, params, sourceFgb, outputFgb }) {
     return runOgr(args);
 }
 
-async function countFgbFeatures(fgbBytes) {
-    const { geojson } = require('flatgeobuf');
-    let featureCount = 0;
-    for await (const feature of geojson.deserialize(fgbBytes)) {
-        if (feature.geometry) featureCount += 1;
-    }
-    return featureCount;
-}
-
 function readExistingRegistry() {
     if (!existsSync(REGISTRY_PATH)) return null;
     try {
@@ -520,10 +665,12 @@ async function main() {
     if (toBuild.length === 0) {
         throw new Error('BUILD_LAYERS is empty');
     }
+    const bundledSpec =
+        process.env.BUNDLED_LAYERS !== undefined
+            ? process.env.BUNDLED_LAYERS
+            : DEFAULT_BUNDLED;
     const bundled = new Set(
-        parseSpec(process.env.BUNDLED_LAYERS || DEFAULT_BUNDLED).map(
-            (s) => `${s.feature}:${s.precision}`
-        )
+        parseSpec(bundledSpec).map((s) => `${s.feature}:${s.precision}`)
     );
     const regions = resolveRegions();
 
@@ -565,17 +712,21 @@ async function main() {
             outputFgb: tmpFgb,
         });
 
-        const fgbBytes = readFileSync(tmpFgb);
-        const gzBytes = gzipSync(fgbBytes, { level: 9 });
-        writeFileSync(gzPath, gzBytes);
+        const rawBytes = statSync(tmpFgb).size;
+        console.log(
+            `Compressing ${path.basename(tmpFgb)} (${humanBytes(rawBytes)})…`
+        );
+        await gzipFile(tmpFgb, gzPath);
+        const gzipBytes = statSync(gzPath).size;
+        const sha256 = await sha256File(gzPath);
+        const featureCount = await countFgbFeatures(tmpFgb);
         rmSync(tmpFgb, { force: true });
 
-        const featureCount = await countFgbFeatures(new Uint8Array(fgbBytes));
         const isBundled = bundled.has(id);
-        if (isBundled && gzBytes.length >= GITHUB_SOFT_LIMIT) {
+        if (isBundled && gzipBytes >= GITHUB_SOFT_LIMIT) {
             oversized = true;
             console.warn(
-                `\n⚠ ${id} is ${humanBytes(gzBytes.length)} — too large to bundle in git.`
+                `\n⚠ ${id} is ${humanBytes(gzipBytes)} — too large to bundle in git.`
             );
         }
 
@@ -586,9 +737,9 @@ async function main() {
             ...(isBundled
                 ? { file: `layers/${base}.fgb.gz` }
                 : { url: `${RELEASE_BASE_URL}/${base}.fgb.gz` }),
-            sha256: sha256Buffer(gzBytes),
-            bytes: fgbBytes.length,
-            gzipBytes: gzBytes.length,
+            sha256,
+            bytes: rawBytes,
+            gzipBytes,
             featureCount,
             simplifyToleranceDeg: params.simplify || null,
             minAreaKm2: params.minAreaKm2 || null,
@@ -600,7 +751,7 @@ async function main() {
         });
 
         console.log(
-            `Wrote ${gzPath} — ${featureCount} features, ${humanBytes(gzBytes.length)} gzip (${humanBytes(fgbBytes.length)} raw)`
+            `Wrote ${gzPath} — ${featureCount} features, ${humanBytes(gzipBytes)} gzip (${humanBytes(rawBytes)} raw)`
         );
     }
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-25T16:20:55.416Z",
-  "builder": "docker-gdal",
+  "generatedAt": "2026-07-31T23:35:31.049Z",
+  "builder": "reused",
   "defaultSelection": "oceans:medium,lakes:medium",
   "features": {
     "oceans": {
@@ -56,34 +56,66 @@
         {
           "region": "antarctica",
           "sourceUrl": "https://download.geofabrik.de/antarctica-latest.osm.pbf",
-          "sourceLastModified": "2026-07-24T22:00:15.000Z",
-          "sourceEtag": "\"1f8ed7d-657627f57372b\"",
-          "sourcePbfSha256": "18432360e97fe1716e73159743bd97a3be6507add42c0217fdce65e3e7354e70",
-          "bytes": 33090941
-        },
-        {
-          "region": "central-america",
-          "sourceUrl": "https://download.geofabrik.de/central-america-latest.osm.pbf",
-          "sourceLastModified": "2026-07-24T22:01:07.000Z",
-          "sourceEtag": "\"2e9b5412-6576282777c3f\"",
-          "sourcePbfSha256": "30913e51568aaf925e6362ccdb4302099e2bb0891080c7b4ee4d56168ed06fb3",
-          "bytes": 781931538
+          "sourceLastModified": "2026-07-29T21:55:48.000Z",
+          "sourceEtag": "\"1f8f088-657c704a51a6d\"",
+          "sourcePbfSha256": "db0e6de1e493e9186462bbb0b0114a58ab7f352a6f29e6d9c046cf20a0ccd92b",
+          "bytes": 33091720
         },
         {
           "region": "australia-oceania",
           "sourceUrl": "https://download.geofabrik.de/australia-oceania-latest.osm.pbf",
-          "sourceLastModified": "2026-07-24T22:02:02.000Z",
-          "sourceEtag": "\"5c7b203d-6576285ba31d0\"",
-          "sourcePbfSha256": "267dc49dc2445a631cc5143a1269584a40990914311600e840ae7e412a89a715",
-          "bytes": 1551573053
+          "sourceLastModified": "2026-07-29T22:02:28.000Z",
+          "sourceEtag": "\"5c909984-657c71c7aa87f\"",
+          "sourcePbfSha256": "4c83545612ab9fd11ab5b44b4660d4aba1c79378252c7874dfd36ea8fee71db7",
+          "bytes": 1552980356
+        },
+        {
+          "region": "central-america",
+          "sourceUrl": "https://download.geofabrik.de/central-america-latest.osm.pbf",
+          "sourceLastModified": "2026-07-29T22:01:17.000Z",
+          "sourceEtag": "\"2eb5e5b3-657c718409253\"",
+          "sourcePbfSha256": "d1fc1a1065df43d48da14dd9c24c4c5cf337d6bcf1b4c8d42ba7aee1b0c10529",
+          "bytes": 783672755
         },
         {
           "region": "south-america",
           "sourceUrl": "https://download.geofabrik.de/south-america-latest.osm.pbf",
-          "sourceLastModified": "2026-07-24T23:02:54.000Z",
-          "sourceEtag": "\"f301b7af-657635f6f9838\"",
-          "sourcePbfSha256": "a6656389aa07090d43c155e5d498e05a7d56277e0d1c86da89353663f12b46e5",
-          "bytes": 4076976047
+          "sourceLastModified": "2026-07-29T23:41:02.000Z",
+          "sourceEtag": "\"f33a303c-657c87cfa91a6\"",
+          "sourcePbfSha256": "6cce3cbdd501a74bccf06c21977d56a831fc9576e2d2f879ff945ec1fe6f9d27",
+          "bytes": 4080676924
+        },
+        {
+          "region": "africa",
+          "sourceUrl": "https://download.geofabrik.de/africa-latest.osm.pbf",
+          "sourceLastModified": "2026-07-29T22:11:40.000Z",
+          "sourceEtag": "\"1d68d48cb-657c73d68584c\"",
+          "sourcePbfSha256": "7b4a5ffc7ecb53dae3c82a8a6d2f9ec34c7c1f1838010e21b359813404ad5c60",
+          "bytes": 7894550731
+        },
+        {
+          "region": "asia",
+          "sourceUrl": "https://download.geofabrik.de/asia-latest.osm.pbf",
+          "sourceLastModified": "2026-07-29T22:17:44.000Z",
+          "sourceEtag": "\"3c0619da9-657c75312bc68\"",
+          "sourcePbfSha256": "6d54011251dacd086d7d5dc31f39c9d6358ed1efffae2dfabc96b04bda2d3d95",
+          "bytes": 16112524713
+        },
+        {
+          "region": "europe",
+          "sourceUrl": "https://download.geofabrik.de/europe-latest.osm.pbf",
+          "sourceLastModified": "2026-07-29T22:32:32.000Z",
+          "sourceEtag": "\"6a6a7f80-8155f9dc9\"",
+          "sourcePbfSha256": "41fafb164999ea774c7750437ed440150aeb625ddcc19481a7830f255e3ff889",
+          "bytes": 34718326217
+        },
+        {
+          "region": "north-america",
+          "sourceUrl": "https://download.geofabrik.de/north-america-latest.osm.pbf",
+          "sourceLastModified": "2026-07-31T02:59:39.000Z",
+          "sourceEtag": "\"479f2a70e-657df61294650\"",
+          "sourcePbfSha256": "2b48f5ce8480cc9299ef3267ac39068e6cf2ac2bc652cec2fd8804ffe44d5108",
+          "bytes": 19225814798
         }
       ]
     }
@@ -125,36 +157,36 @@
     {
       "feature": "ponds",
       "precision": "medium",
-      "delivery": "bundled",
-      "file": "layers/ponds-medium.fgb.gz",
-      "sha256": "3bdc83ffb9d1c302d5a39a7327ec9ddb66568349703b21a5c889bfbb9bb19558",
-      "bytes": 73285608,
-      "gzipBytes": 30188910,
-      "featureCount": 324884,
+      "delivery": "download",
+      "url": "https://github.com/osbytes/is-on-water/releases/download/data-v1/ponds-medium.fgb.gz",
+      "sha256": "974e5cf11a736d49a11121535b407b3a04ccd53c54d524ed80f2760a9b1f3f1d",
+      "bytes": 2204856496,
+      "gzipBytes": 859768465,
+      "featureCount": 10077531,
       "simplifyToleranceDeg": "0.003",
       "minAreaKm2": "0.01",
       "maxAreaKm2": "2",
       "source": "OpenStreetMap via Geofabrik",
       "license": "ODbL",
       "attribution": "© OpenStreetMap contributors (via Geofabrik)",
-      "scope": "OSM ponds/lakes/reservoirs 0.01–2 km² (regions: antarctica, central-america, australia-oceania, south-america; complements HydroLAKES); ~333 m shoreline detail"
+      "scope": "OSM ponds/lakes/reservoirs 0.01–2 km² (global; complements HydroLAKES); ~333 m shoreline detail"
     },
     {
       "feature": "rivers",
       "precision": "medium",
-      "delivery": "bundled",
-      "file": "layers/rivers-medium.fgb.gz",
-      "sha256": "900f0a59c3cb08063116fdcbbf10b52d8a2cdb6fc7f2abde48f6b038b0339114",
-      "bytes": 31932384,
-      "gzipBytes": 20448110,
-      "featureCount": 58042,
+      "delivery": "download",
+      "url": "https://github.com/osbytes/is-on-water/releases/download/data-v1/rivers-medium.fgb.gz",
+      "sha256": "a5d76612e50f9800adb43348b1e81dda8d9fd37e073615447554a3dd5dc63779",
+      "bytes": 249250208,
+      "gzipBytes": 144519608,
+      "featureCount": 596653,
       "simplifyToleranceDeg": "0.003",
       "minAreaKm2": null,
       "maxAreaKm2": null,
       "source": "OpenStreetMap via Geofabrik",
       "license": "ODbL",
       "attribution": "© OpenStreetMap contributors (via Geofabrik)",
-      "scope": "OSM riverbank / river / canal area geometries (regions: antarctica, central-america, australia-oceania, south-america); ~333 m shoreline detail"
+      "scope": "OSM riverbank / river / canal area geometries (global); ~333 m shoreline detail"
     }
   ]
 }

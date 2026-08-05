@@ -36,7 +36,7 @@
     "tap": "^21.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
-    "undici": "^6.27.0"
+    "undici": "^6.28.0"
   },
   "dependencies": {
     "@fastify/compress": "^8.0.1",
